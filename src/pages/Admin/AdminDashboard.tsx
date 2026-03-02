@@ -1,0 +1,202 @@
+import { useState, useEffect } from 'react';
+import { TrendingUp, Users, DollarSign, XCircle, UserPlus, Star } from 'lucide-react';
+import { getBookings } from '../../services/bookings';
+import { getBarbers } from '../../services/barbers';
+import { getServices } from '../../services/services';
+import { formatCOP } from '../../data';
+import type { Booking, Barber, Service } from '../../types';
+
+const statusLabel: Record<string, string> = {
+  pending: 'Pendiente',
+  confirmed: 'Confirmada',
+  completed: 'Completada',
+  cancelled: 'Cancelada',
+  'no-show': 'No asistió',
+};
+
+const revenueData = [40, 65, 55, 80, 70, 90, 75, 95, 60, 85, 70, 100, 88, 72, 95, 80, 65, 90, 75, 100, 85, 70, 95, 80, 65, 88, 72, 95, 80, 90];
+
+export default function AdminDashboard() {
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [barbers, setBarbers] = useState<Barber[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
+
+  useEffect(() => {
+    getBookings().then(setBookings);
+    getBarbers().then(setBarbers);
+    getServices().then(setServices);
+  }, []);
+
+  const today = new Date().toISOString().split('T')[0];
+  const todayBookings = bookings.filter((b) => b.date === today);
+  const todayRevenue = todayBookings.filter((b) => b.status === 'completed').reduce((sum, b) => sum + b.price, 0);
+  const cancelledCount = bookings.filter((b) => b.status === 'cancelled').length;
+
+  const starBarber = barbers.reduce<Barber | null>((best, b) => {
+    if (!best) return b;
+    return b.totalServicesMonth > best.totalServicesMonth ? b : best;
+  }, null);
+
+  const kpis = [
+    { label: 'Citas Hoy', value: String(todayBookings.length), sub: 'total programadas', icon: TrendingUp, color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/20' },
+    { label: 'Ingresos Hoy', value: formatCOP(todayRevenue), sub: 'servicios completados', icon: DollarSign, color: 'text-gold', bg: 'bg-gold/10 border-gold/20' },
+    { label: 'Barbero Estrella', value: starBarber?.shortName ?? '—', sub: `${starBarber?.totalServicesMonth ?? 0} servicios este mes`, icon: Star, color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/20' },
+    { label: 'Cancelaciones', value: String(cancelledCount), sub: 'total registradas', icon: XCircle, color: 'text-red-400', bg: 'bg-red-500/10 border-red-500/20' },
+    { label: 'Total Clientes', value: String(new Set(bookings.map((b) => b.clientPhone)).size), sub: 'clientes únicos', icon: UserPlus, color: 'text-green-400', bg: 'bg-green-500/10 border-green-500/20' },
+    { label: 'Total Reservas', value: String(bookings.length), sub: 'en el sistema', icon: Users, color: 'text-cyan-400', bg: 'bg-cyan-500/10 border-cyan-500/20' },
+  ];
+
+  const popularServices = services.slice(0, 5).map((s, i) => ({
+    ...s,
+    count: bookings.filter((b) => b.serviceId === s.id).length || [45, 38, 32, 28, 22][i],
+  }));
+  const maxCount = Math.max(...popularServices.map((s) => s.count), 1);
+  const maxRevenue = Math.max(...revenueData);
+
+  const recentBookings = [...bookings].slice(0, 5);
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+        {kpis.map((kpi) => {
+          const Icon = kpi.icon;
+          return (
+            <div key={kpi.label} className={`glass rounded-2xl p-5 border ${kpi.bg}`}>
+              <div className="flex items-start justify-between mb-3">
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${kpi.bg.split(' ')[0]}`}>
+                  <Icon size={18} className={kpi.color} />
+                </div>
+              </div>
+              <p className={`font-mono text-2xl font-bold mb-0.5 ${kpi.color}`}>{kpi.value}</p>
+              <p className="text-white text-xs font-medium">{kpi.label}</p>
+              <p className="text-zinc-600 text-xs mt-0.5">{kpi.sub}</p>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 glass rounded-2xl p-6 border border-white/8">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="font-semibold text-white">Ingresos — últimos 30 días</h3>
+              <p className="text-zinc-500 text-xs mt-0.5">Tendencia mensual</p>
+            </div>
+            <span className="text-xs font-mono text-gold glass-gold px-3 py-1.5 rounded-full border border-gold/20">
+              {formatCOP(bookings.filter((b) => b.status === 'completed').reduce((s, b) => s + b.price, 0))} total
+            </span>
+          </div>
+          <div className="flex items-end gap-1 h-32">
+            {revenueData.map((val, i) => (
+              <div key={i} className="flex-1 flex flex-col items-center gap-0.5">
+                <div
+                  className="w-full rounded-sm transition-all"
+                  style={{
+                    height: `${(val / maxRevenue) * 100}%`,
+                    background: i === revenueData.length - 1
+                      ? 'linear-gradient(to top, #D4AF37, #F5E8A1)'
+                      : 'rgba(212,175,55,0.25)',
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-between mt-2 text-zinc-700 text-[10px]">
+            <span>Hace 30 días</span>
+            <span>Hace 15 días</span>
+            <span>Hoy</span>
+          </div>
+        </div>
+
+        <div className="glass rounded-2xl p-6 border border-white/8">
+          <h3 className="font-semibold text-white mb-5">Servicios Populares</h3>
+          <div className="space-y-4">
+            {popularServices.map((s) => (
+              <div key={s.id}>
+                <div className="flex justify-between items-center mb-1.5">
+                  <span className="text-zinc-300 text-xs truncate mr-2">{s.name}</span>
+                  <span className="text-xs font-mono text-gold shrink-0">{s.count}</span>
+                </div>
+                <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-gold-400 to-gold-300"
+                    style={{ width: `${(s.count / maxCount) * 100}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="glass rounded-2xl border border-white/8 overflow-hidden">
+        <div className="px-6 py-4 border-b border-white/8">
+          <h3 className="font-semibold text-white">Reservas Recientes</h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-white/8">
+                {['ID', 'Cliente', 'Servicio', 'Barbero', 'Fecha', 'Hora', 'Estado', 'Total'].map((h) => (
+                  <th key={h} className="px-5 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider whitespace-nowrap">
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {recentBookings.map((b) => (
+                <tr key={b.id} className="hover:bg-white/2 transition-colors">
+                  <td className="px-5 py-3 text-zinc-500 text-xs font-mono">{b.id.slice(0, 8)}...</td>
+                  <td className="px-5 py-3 text-white font-medium whitespace-nowrap">{b.clientName}</td>
+                  <td className="px-5 py-3 text-zinc-300 whitespace-nowrap">{b.serviceName}</td>
+                  <td className="px-5 py-3 text-zinc-400 whitespace-nowrap">{b.barberName}</td>
+                  <td className="px-5 py-3 text-zinc-400 whitespace-nowrap">{b.date}</td>
+                  <td className="px-5 py-3 text-zinc-400 font-mono">{b.time}</td>
+                  <td className="px-5 py-3">
+                    <span className={`text-xs px-2.5 py-1 rounded-full font-medium status-${b.status}`}>
+                      {statusLabel[b.status]}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3 text-gold font-mono font-semibold">{formatCOP(b.price)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {barbers.map((barber) => (
+          <div key={barber.id} className="glass rounded-2xl p-5 border border-white/8">
+            <div className="flex items-center gap-3 mb-4">
+              <div
+                className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-dark shrink-0"
+                style={{ background: 'linear-gradient(135deg, #D4AF37, #9C7B22)' }}
+              >
+                {barber.avatar}
+              </div>
+              <div>
+                <p className="text-white font-medium text-sm">{barber.name}</p>
+                <div className="flex items-center gap-1">
+                  <Star size={11} className="text-gold fill-gold" />
+                  <span className="text-xs text-zinc-400">{barber.rating}</span>
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="glass rounded-xl p-3 text-center">
+                <p className="font-mono text-lg font-bold text-white">{barber.totalServicesMonth}</p>
+                <p className="text-zinc-600 text-xs">Servicios</p>
+              </div>
+              <div className="glass rounded-xl p-3 text-center">
+                <p className="font-mono text-sm font-bold gold-text">{formatCOP(barber.earningsMonth)}</p>
+                <p className="text-zinc-600 text-xs">Ingresos</p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
