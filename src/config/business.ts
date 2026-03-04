@@ -14,7 +14,7 @@ export const businessConfig: BusinessConfig = {
   country: 'Colombia',
   primaryColor: '#D4AF37',
   accentColor: '#6B4C2B',
-  mapEmbedUrl: 'https://www.openstreetmap.org/export/embed.html?bbox=-73.2700%2C10.4500%2C-73.2300%2C10.4800&layer=mapnik',
+  mapEmbedUrl: 'https://www.openstreetmap.org/export/embed.html?bbox=-73.2632%2C10.4824%2C-73.2592%2C10.4864&layer=mapnik&marker=10.4844%2C-73.2612',
   hours: [
     { day: 'Lunes', open: '09:00', close: '19:00', closed: false },
     { day: 'Martes', open: '09:00', close: '19:00', closed: false },
