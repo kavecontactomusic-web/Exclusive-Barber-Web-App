@@ -35,9 +35,20 @@ export default function Navbar({ onBooking }: NavbarProps) {
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between">
           <a href="#inicio" className="flex items-center gap-2.5 group">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-gold-300 to-gold-500 flex items-center justify-center shadow-gold">
-              <Scissors size={16} className="text-dark" />
-            </div>
+            <img 
+  src="/logo_exclusivebarber.png" 
+  alt="Exclusive Barber" 
+  className="w-10 h-10 object-contain"
+/>
+```
+
+---
+
+Luego guarda con **Ctrl + S** y en la terminal ejecuta:
+```
+git add .
+git commit -m "agregando logo navbar"
+git push
             <span className="font-serif font-bold text-lg text-white group-hover:text-gold transition-colors">
               {businessConfig.name}
             </span>
