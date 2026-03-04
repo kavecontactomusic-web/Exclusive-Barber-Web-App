@@ -44,7 +44,7 @@ export default function Navbar({ onBooking }: NavbarProps) {
 
           <div className="hidden lg:flex items-center gap-8">
             {navLinks.map((link) => (
-              
+              <a
                 key={link.href}
                 href={link.href}
                 className="text-zinc-400 hover:text-white text-sm font-medium tracking-wide transition-colors duration-200 relative group"
@@ -56,7 +56,7 @@ export default function Navbar({ onBooking }: NavbarProps) {
           </div>
 
           <div className="hidden lg:flex items-center gap-3">
-            
+            <a
               href={`https://wa.me/${businessConfig.whatsapp}`}
               target="_blank"
               rel="noopener noreferrer"
@@ -87,7 +87,7 @@ export default function Navbar({ onBooking }: NavbarProps) {
           <div className="absolute top-0 right-0 w-72 h-full glass border-l border-white/10 flex flex-col pt-24 pb-8 px-8 animate-slide-in-right">
             <div className="flex flex-col gap-1 mb-8">
               {navLinks.map((link) => (
-                
+                <a
                   key={link.href}
                   href={link.href}
                   onClick={() => setMenuOpen(false)}
@@ -98,7 +98,7 @@ export default function Navbar({ onBooking }: NavbarProps) {
               ))}
             </div>
             <div className="flex flex-col gap-3 mt-auto">
-              
+              <a
                 href={`https://wa.me/${businessConfig.whatsapp}`}
                 target="_blank"
                 rel="noopener noreferrer"
