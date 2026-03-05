@@ -96,7 +96,7 @@ export default function Location() {
 
           <div className="lg:col-span-3 rounded-2xl overflow-hidden border border-white/10 relative" style={{ minHeight: '480px' }}>
             <a
-              href="https://maps.google.com/?q=10.484470953195434,-73.26120884694197"
+              href="https://maps.google.com/?q=10.483948788751567,-73.2611657757669"
               target="_blank"
               rel="noopener noreferrer"
               className="block w-full h-full"
