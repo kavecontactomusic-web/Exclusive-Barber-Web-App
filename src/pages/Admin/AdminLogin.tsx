@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Scissors, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { businessConfig } from '../../config/business';
+import { supabase } from '../../lib/supabase';
 
 interface Props {
   onLogin: () => void;
@@ -18,9 +19,23 @@ export default function AdminLogin({ onLogin }: Props) {
     if (!password) { setError('Ingresa una contraseña'); return; }
     setLoading(true);
     setError('');
-    await new Promise((r) => setTimeout(r, 1000));
-    setLoading(false);
-    onLogin();
+    try {
+      const { data, error: dbError } = await supabase
+        .from('admin_users')
+        .select('id')
+        .eq('email', email)
+        .eq('password_hash', password)
+        .single();
+      if (dbError || !data) {
+        setError('Correo o contraseña incorrectos');
+      } else {
+        onLogin();
+      }
+    } catch {
+      setError('Error al conectar. Intenta nuevamente.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -39,7 +54,6 @@ export default function AdminLogin({ onLogin }: Props) {
 
         <div className="glass rounded-2xl p-8 border border-white/10">
           <h2 className="font-semibold text-white text-lg mb-6">Iniciar sesión</h2>
-
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="text-xs text-zinc-500 uppercase tracking-wider block mb-2">Email</label>
@@ -50,7 +64,6 @@ export default function AdminLogin({ onLogin }: Props) {
                 className="w-full px-4 py-3 glass border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-gold/40 transition-colors bg-transparent"
               />
             </div>
-
             <div>
               <label className="text-xs text-zinc-500 uppercase tracking-wider block mb-2">Contraseña</label>
               <div className="relative">
@@ -58,7 +71,7 @@ export default function AdminLogin({ onLogin }: Props) {
                   type={showPw ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Cualquier contraseña (demo)"
+                  placeholder="Contraseña"
                   className="w-full px-4 py-3 pr-11 glass border border-white/10 rounded-xl text-white placeholder-zinc-600 text-sm focus:outline-none focus:border-gold/40 transition-colors bg-transparent"
                 />
                 <button
@@ -70,11 +83,7 @@ export default function AdminLogin({ onLogin }: Props) {
                 </button>
               </div>
             </div>
-
-            {error && (
-              <p className="text-red-400 text-xs">{error}</p>
-            )}
-
+            {error && <p className="text-red-400 text-xs">{error}</p>}
             <button
               type="submit"
               disabled={loading}
@@ -90,10 +99,6 @@ export default function AdminLogin({ onLogin }: Props) {
               )}
             </button>
           </form>
-
-          <p className="text-center text-zinc-600 text-xs mt-4">
-            Modo demo — presiona Entrar al Panel con cualquier contraseña
-          </p>
         </div>
 
         <p className="text-center mt-4">
@@ -105,3 +110,10 @@ export default function AdminLogin({ onLogin }: Props) {
     </div>
   );
 }
+```
+
+Guarda **Ctrl + S** y los 3 comandos de git:
+```
+git add .
+git commit -m "login admin con supabase"
+git push
