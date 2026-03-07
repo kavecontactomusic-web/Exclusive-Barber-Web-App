@@ -110,10 +110,3 @@ export default function AdminLogin({ onLogin }: Props) {
     </div>
   );
 }
-```
-
-Guarda **Ctrl + S** y los 3 comandos de git:
-```
-git add .
-git commit -m "login admin con supabase"
-git push

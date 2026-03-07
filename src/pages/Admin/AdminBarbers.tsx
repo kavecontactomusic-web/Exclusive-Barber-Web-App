@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Star, Phone, Edit2, ToggleLeft, ToggleRight, X, Plus, User, Loader2 } from 'lucide-react';
-import { getBarbers, updateBarberAvailability, createBarber, updateBarber } from '../../services/barbers';
+import { Star, Phone, Edit2, ToggleLeft, ToggleRight, X, Plus, User, Loader2, Trash2 } from 'lucide-react';
+import { getBarbers, updateBarberAvailability, createBarber, updateBarber, deleteBarber } from '../../services/barbers';
 import { formatCOP } from '../../data';
 import type { Barber } from '../../types';
 
@@ -36,6 +36,12 @@ export default function AdminBarbers() {
       .then(setList)
       .finally(() => setLoading(false));
   }, []);
+
+  const handleDelete = async (id: string, name: string) => {
+    if (!confirm(`¿Eliminar a ${name}? Esta acción no se puede deshacer.`)) return;
+    await deleteBarber(id);
+    setList((prev) => prev.filter((b) => b.id !== id));
+  };
 
   const toggleAvailable = async (id: string) => {
     const barber = list.find((b) => b.id === id);
@@ -99,9 +105,7 @@ export default function AdminBarbers() {
         await updateBarber(editTarget.id, updates);
         setList((prev) =>
           prev.map((b) =>
-            b.id === editTarget.id
-              ? { ...b, ...updates }
-              : b
+            b.id === editTarget.id ? { ...b, ...updates } : b
           )
         );
       } else {
@@ -221,6 +225,12 @@ export default function AdminBarbers() {
                 >
                   <Edit2 size={13} />
                   Editar
+                </button>
+                <button
+                  onClick={() => handleDelete(barber.id, barber.name)}
+                  className="flex items-center justify-center gap-1.5 py-2 px-3 glass border border-red-500/20 rounded-xl text-red-400 hover:text-red-300 text-xs transition-all hover:border-red-400/40"
+                >
+                  <Trash2 size={13} />
                 </button>
                 <div className="flex items-center gap-2 px-3 py-2 glass rounded-xl">
                   <span className="text-zinc-600 text-xs">PIN:</span>
