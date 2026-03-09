@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Scissors, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { businessConfig } from '../../config/business';
+import { getAdminPassword } from '../../services/adminConfig';
 
 interface Props {
   onLogin: () => void;
@@ -17,11 +18,15 @@ export default function AdminLogin({ onLogin }: Props) {
     if (!password) { setError('Ingresa una contraseña'); return; }
     setLoading(true);
     setError('');
-    await new Promise(r => setTimeout(r, 500));
-    if (password === 'Admin2026') {
-      onLogin();
-    } else {
-      setError('Contraseña incorrecta');
+    try {
+      const correctPassword = await getAdminPassword();
+      if (password === correctPassword) {
+        onLogin();
+      } else {
+        setError('Contraseña incorrecta');
+      }
+    } catch {
+      setError('Error al verificar. Intenta de nuevo.');
     }
     setLoading(false);
   };
@@ -42,7 +47,7 @@ export default function AdminLogin({ onLogin }: Props) {
 
         <div className="glass rounded-2xl p-8 border border-white/10">
           <h2 className="font-semibold text-white text-lg mb-6">Iniciar sesión</h2>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-4">
             <div>
               <label className="text-xs text-zinc-500 uppercase tracking-wider block mb-2">Contraseña</label>
               <div className="relative">
@@ -50,6 +55,7 @@ export default function AdminLogin({ onLogin }: Props) {
                   type={showPw ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSubmit(e as any)}
                   placeholder="Contraseña"
                   className="w-full px-4 py-3 pr-11 glass border border-white/10 rounded-xl text-white placeholder-zinc-600 text-sm focus:outline-none focus:border-gold/40 transition-colors bg-transparent"
                 />
@@ -64,7 +70,7 @@ export default function AdminLogin({ onLogin }: Props) {
             </div>
             {error && <p className="text-red-400 text-xs">{error}</p>}
             <button
-              type="submit"
+              onClick={handleSubmit}
               disabled={loading}
               className="w-full btn-gold py-3.5 rounded-full font-semibold flex items-center justify-center gap-2 mt-2"
             >
@@ -77,7 +83,7 @@ export default function AdminLogin({ onLogin }: Props) {
                 <span>Entrar al Panel</span>
               )}
             </button>
-          </form>
+          </div>
         </div>
 
         <p className="text-center mt-4">

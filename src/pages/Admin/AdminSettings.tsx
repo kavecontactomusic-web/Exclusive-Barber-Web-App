@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Save } from 'lucide-react';
+import { Save, Lock, Eye, EyeOff, CheckCircle, Loader2 } from 'lucide-react';
 import { businessConfig } from '../../config/business';
+import { updateAdminPassword, getAdminPassword } from '../../services/adminConfig';
 
 export default function AdminSettings() {
   const [form, setForm] = useState({
@@ -24,6 +25,29 @@ export default function AdminSettings() {
   const handleSave = () => {
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+  };
+
+  const [pwForm, setPwForm] = useState({ current: '', newPw: '', confirm: '' });
+  const [showPws, setShowPws] = useState({ current: false, newPw: false, confirm: false });
+  const [pwError, setPwError] = useState('');
+  const [pwSaved, setPwSaved] = useState(false);
+  const [pwLoading, setPwLoading] = useState(false);
+
+  const handlePasswordChange = async () => {
+    setPwError('');
+    if (!pwForm.current || !pwForm.newPw || !pwForm.confirm) { setPwError('Completa todos los campos'); return; }
+    if (pwForm.newPw.length < 6) { setPwError('Mínimo 6 caracteres'); return; }
+    if (pwForm.newPw !== pwForm.confirm) { setPwError('Las contraseñas no coinciden'); return; }
+    setPwLoading(true);
+    try {
+      const current = await getAdminPassword();
+      if (pwForm.current !== current) { setPwError('Contraseña actual incorrecta'); setPwLoading(false); return; }
+      await updateAdminPassword(pwForm.newPw);
+      setPwSaved(true);
+      setPwForm({ current: '', newPw: '', confirm: '' });
+      setTimeout(() => setPwSaved(false), 3000);
+    } catch { setPwError('Error al cambiar contraseña.'); }
+    setPwLoading(false);
   };
 
   return (
@@ -109,6 +133,53 @@ export default function AdminSettings() {
               </button>
             </div>
           ))}
+        </div>
+      </div>
+
+      <div className="glass rounded-2xl p-6 border border-white/8">
+        <h3 className="font-semibold text-white mb-5 flex items-center gap-2">
+          <Lock size={16} className="text-gold" />
+          Cambiar Contraseña
+        </h3>
+        <div className="space-y-4">
+          {[
+            { key: 'current', label: 'Contraseña actual' },
+            { key: 'newPw', label: 'Nueva contraseña' },
+            { key: 'confirm', label: 'Confirmar nueva contraseña' },
+          ].map(({ key, label }) => (
+            <div key={key}>
+              <label className="text-xs text-zinc-500 uppercase tracking-wider block mb-2">{label}</label>
+              <div className="relative">
+                <input
+                  type={showPws[key as keyof typeof showPws] ? 'text' : 'password'}
+                  value={pwForm[key as keyof typeof pwForm]}
+                  onChange={(e) => setPwForm(f => ({ ...f, [key]: e.target.value }))}
+                  className="w-full px-4 py-2.5 pr-11 glass border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-gold/40 bg-transparent"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPws(s => ({ ...s, [key]: !s[key as keyof typeof s] }))}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+                >
+                  {showPws[key as keyof typeof showPws] ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
+              </div>
+            </div>
+          ))}
+          {pwError && <p className="text-red-400 text-xs">{pwError}</p>}
+          <button
+            onClick={handlePasswordChange}
+            disabled={pwLoading}
+            className="btn-gold px-5 py-2.5 rounded-full font-semibold flex items-center gap-2 text-sm"
+          >
+            {pwSaved ? (
+              <><CheckCircle size={15} /><span>Contraseña actualizada</span></>
+            ) : pwLoading ? (
+              <><Loader2 size={15} className="animate-spin" /><span>Guardando...</span></>
+            ) : (
+              <><Lock size={15} /><span>Cambiar Contraseña</span></>
+            )}
+          </button>
         </div>
       </div>
 
