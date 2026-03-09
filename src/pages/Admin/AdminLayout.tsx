@@ -84,7 +84,6 @@ export default function AdminLayout({ activeTab, onTabChange, onLogout, children
 
     const notifs: Notification[] = [];
 
-    // Nuevas reservas de hoy
     const { data: newBookings } = await supabase
       .from('bookings')
       .select('*')
@@ -104,7 +103,6 @@ export default function AdminLayout({ activeTab, onTabChange, onLogout, children
       });
     });
 
-    // Reservas canceladas (últimas 24h)
     const yesterday = new Date(Date.now() - 86400000);
     const { data: cancelled } = await supabase
       .from('bookings')
@@ -125,7 +123,6 @@ export default function AdminLayout({ activeTab, onTabChange, onLogout, children
       });
     });
 
-    // Recordatorio: citas de mañana
     const { data: tomorrow_bookings } = await supabase
       .from('bookings')
       .select('*')
@@ -144,7 +141,6 @@ export default function AdminLayout({ activeTab, onTabChange, onLogout, children
       });
     }
 
-    // Marcar leídas desde localStorage
     setNotifications(notifs.map(n => ({ ...n, read: readIds.has(n.id) })));
   }, [readIds]);
 
@@ -160,7 +156,6 @@ export default function AdminLayout({ activeTab, onTabChange, onLogout, children
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
-  // Recargar al abrir el panel
   useEffect(() => {
     if (notifOpen) loadNotifications();
   }, [notifOpen]);
@@ -214,7 +209,7 @@ export default function AdminLayout({ activeTab, onTabChange, onLogout, children
 
       <div className="p-3 border-t border-white/8 space-y-0.5">
         
-          href="/"
+          <a href="/"
           target="_blank"
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-zinc-400 hover:text-white hover:bg-white/5 transition-all"
         >
