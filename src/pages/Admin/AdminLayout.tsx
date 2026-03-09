@@ -1,10 +1,11 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   LayoutDashboard, Calendar, ClipboardList, Users, Scissors,
   UserCircle, BarChart2, Settings, LogOut, ExternalLink, Menu, Bell,
   CheckCheck, Clock, UserPlus, AlertCircle, CalendarCheck,
 } from 'lucide-react';
 import { businessConfig } from '../../config/business';
+import { supabase } from '../../lib/supabase';
 
 export type AdminTab = 'dashboard' | 'calendar' | 'bookings' | 'barbers' | 'services' | 'clients' | 'reports' | 'settings';
 
@@ -24,48 +25,13 @@ interface Notification {
   read: boolean;
 }
 
-const initialNotifications: Notification[] = [
-  {
-    id: 'n1',
-    type: 'booking',
-    title: 'Nueva reserva',
-    description: 'Carlos M. reservó Corte Fade con Juan para las 3:00 PM',
-    time: 'Hace 5 min',
-    read: false,
-  },
-  {
-    id: 'n2',
-    type: 'client',
-    title: 'Nuevo cliente',
-    description: 'Andrés García se registró desde la web',
-    time: 'Hace 20 min',
-    read: false,
-  },
-  {
-    id: 'n3',
-    type: 'alert',
-    title: 'Reserva cancelada',
-    description: 'Pedro L. canceló su cita de las 11:00 AM de hoy',
-    time: 'Hace 1 h',
-    read: false,
-  },
-  {
-    id: 'n4',
-    type: 'reminder',
-    title: 'Recordatorio de cita',
-    description: '3 citas pendientes de confirmar para mañana',
-    time: 'Hace 2 h',
-    read: true,
-  },
-  {
-    id: 'n5',
-    type: 'booking',
-    title: 'Cita completada',
-    description: 'Luis R. completó su servicio de Arreglo de Barba',
-    time: 'Hace 3 h',
-    read: true,
-  },
-];
+function timeAgo(dateStr: string): string {
+  const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+  if (diff < 60) return 'Hace un momento';
+  if (diff < 3600) return `Hace ${Math.floor(diff / 60)} min`;
+  if (diff < 86400) return `Hace ${Math.floor(diff / 3600)} h`;
+  return `Hace ${Math.floor(diff / 86400)} días`;
+}
 
 const notifIcon = (type: Notification['type']) => {
   switch (type) {
@@ -96,13 +62,93 @@ const navItems: { id: AdminTab; label: string; icon: React.ElementType }[] = [
   { id: 'settings', label: 'Configuración', icon: Settings },
 ];
 
+const READ_KEY = 'eb_read_notifs';
+
 export default function AdminLayout({ activeTab, onTabChange, onLogout, children }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [notifications, setNotifications] = useState<Notification[]>(initialNotifications);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [readIds, setReadIds] = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem(READ_KEY) || '[]')); }
+    catch { return new Set(); }
+  });
   const notifRef = useRef<HTMLDivElement>(null);
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  const loadNotifications = useCallback(async () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const dayAfter = new Date(tomorrow);
+    dayAfter.setDate(dayAfter.getDate() + 1);
+
+    const notifs: Notification[] = [];
+
+    // Nuevas reservas de hoy
+    const { data: newBookings } = await supabase
+      .from('bookings')
+      .select('*')
+      .gte('created_at', today.toISOString())
+      .neq('status', 'cancelled')
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    (newBookings || []).forEach((b: any) => {
+      notifs.push({
+        id: `booking-${b.id}`,
+        type: 'booking',
+        title: 'Nueva reserva',
+        description: `${b.client_name} reservó ${b.service_name} con ${b.barber_name} a las ${b.time}`,
+        time: timeAgo(b.created_at),
+        read: false,
+      });
+    });
+
+    // Reservas canceladas (últimas 24h)
+    const yesterday = new Date(Date.now() - 86400000);
+    const { data: cancelled } = await supabase
+      .from('bookings')
+      .select('*')
+      .eq('status', 'cancelled')
+      .gte('updated_at', yesterday.toISOString())
+      .order('updated_at', { ascending: false })
+      .limit(3);
+
+    (cancelled || []).forEach((b: any) => {
+      notifs.push({
+        id: `cancel-${b.id}`,
+        type: 'alert',
+        title: 'Reserva cancelada',
+        description: `${b.client_name} canceló su cita de las ${b.time}`,
+        time: timeAgo(b.updated_at || b.created_at),
+        read: false,
+      });
+    });
+
+    // Recordatorio: citas de mañana
+    const { data: tomorrow_bookings } = await supabase
+      .from('bookings')
+      .select('*')
+      .gte('date', tomorrow.toISOString().split('T')[0])
+      .lt('date', dayAfter.toISOString().split('T')[0])
+      .neq('status', 'cancelled');
+
+    if (tomorrow_bookings && tomorrow_bookings.length > 0) {
+      notifs.push({
+        id: `reminder-${tomorrow.toISOString().split('T')[0]}`,
+        type: 'reminder',
+        title: 'Recordatorio de citas',
+        description: `${tomorrow_bookings.length} cita${tomorrow_bookings.length > 1 ? 's' : ''} programada${tomorrow_bookings.length > 1 ? 's' : ''} para mañana`,
+        time: 'Hoy',
+        read: false,
+      });
+    }
+
+    // Marcar leídas desde localStorage
+    setNotifications(notifs.map(n => ({ ...n, read: readIds.has(n.id) })));
+  }, [readIds]);
+
+  useEffect(() => { loadNotifications(); }, []);
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
@@ -114,12 +160,25 @@ export default function AdminLayout({ activeTab, onTabChange, onLogout, children
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
+  // Recargar al abrir el panel
+  useEffect(() => {
+    if (notifOpen) loadNotifications();
+  }, [notifOpen]);
+
+  const unreadCount = notifications.filter((n) => !n.read).length;
+
   const markAllRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    const allIds = new Set(notifications.map(n => n.id));
+    localStorage.setItem(READ_KEY, JSON.stringify([...allIds]));
+    setReadIds(allIds);
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
   };
 
   const markRead = (id: string) => {
-    setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, read: true } : n));
+    const newReadIds = new Set([...readIds, id]);
+    localStorage.setItem(READ_KEY, JSON.stringify([...newReadIds]));
+    setReadIds(newReadIds);
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
   };
 
   const SidebarContent = () => (
@@ -154,7 +213,7 @@ export default function AdminLayout({ activeTab, onTabChange, onLogout, children
       </nav>
 
       <div className="p-3 border-t border-white/8 space-y-0.5">
-        <a
+        
           href="/"
           target="_blank"
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-zinc-400 hover:text-white hover:bg-white/5 transition-all"
