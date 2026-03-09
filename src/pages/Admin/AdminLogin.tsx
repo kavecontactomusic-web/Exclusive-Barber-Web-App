@@ -1,14 +1,12 @@
 import { useState } from 'react';
 import { Scissors, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { businessConfig } from '../../config/business';
-import { supabase } from '../../lib/supabase';
 
 interface Props {
   onLogin: () => void;
 }
 
 export default function AdminLogin({ onLogin }: Props) {
-  const [email, setEmail] = useState('admin@exclusivebarber.co');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -19,23 +17,13 @@ export default function AdminLogin({ onLogin }: Props) {
     if (!password) { setError('Ingresa una contraseña'); return; }
     setLoading(true);
     setError('');
-    try {
-      const { data, error: dbError } = await supabase
-        .from('admin_users')
-        .select('id')
-        .eq('email', email)
-        .eq('password_hash', password)
-        .single();
-      if (dbError || !data) {
-        setError('Correo o contraseña incorrectos');
-      } else {
-        onLogin();
-      }
-    } catch {
-      setError('Error al conectar. Intenta nuevamente.');
-    } finally {
-      setLoading(false);
+    await new Promise(r => setTimeout(r, 500));
+    if (password === 'Admin2026') {
+      onLogin();
+    } else {
+      setError('Contraseña incorrecta');
     }
+    setLoading(false);
   };
 
   return (
@@ -55,15 +43,6 @@ export default function AdminLogin({ onLogin }: Props) {
         <div className="glass rounded-2xl p-8 border border-white/10">
           <h2 className="font-semibold text-white text-lg mb-6">Iniciar sesión</h2>
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="text-xs text-zinc-500 uppercase tracking-wider block mb-2">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 glass border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-gold/40 transition-colors bg-transparent"
-              />
-            </div>
             <div>
               <label className="text-xs text-zinc-500 uppercase tracking-wider block mb-2">Contraseña</label>
               <div className="relative">
