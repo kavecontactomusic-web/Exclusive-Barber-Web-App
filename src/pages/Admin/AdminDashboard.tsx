@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
-import { TrendingUp, Users, DollarSign, XCircle, UserPlus, Star } from 'lucide-react';
+import { TrendingUp, Users, DollarSign, XCircle, UserPlus, Star, FileText, ChevronDown, ChevronUp } from 'lucide-react';
 import { getBookings } from '../../services/bookings';
 import { getBarbers } from '../../services/barbers';
 import { getServices } from '../../services/services';
+import { getMonthlyReports, generateMonthlyReport, getMonthName } from '../../services/monthlyReports';
 import { formatCOP } from '../../data';
 import type { Booking, Barber, Service } from '../../types';
+import type { MonthlyReport } from '../../services/monthlyReports';
 
 const statusLabel: Record<string, string> = {
   pending: 'Pendiente',
@@ -20,12 +22,34 @@ export default function AdminDashboard() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [barbers, setBarbers] = useState<Barber[]>([]);
   const [services, setServices] = useState<Service[]>([]);
+  const [reports, setReports] = useState<MonthlyReport[]>([]);
+  const [showReports, setShowReports] = useState(false);
+  const [generatingReport, setGeneratingReport] = useState(false);
+  const [reportSuccess, setReportSuccess] = useState(false);
 
   useEffect(() => {
     getBookings().then(setBookings);
     getBarbers().then(setBarbers);
     getServices().then(setServices);
+    getMonthlyReports().then(setReports);
   }, []);
+
+  // Auto-generate report on first day of month
+  useEffect(() => {
+    if (bookings.length === 0 || barbers.length === 0) return;
+    const today = new Date();
+    if (today.getDate() !== 1) return;
+
+    const prevMonth = today.getMonth() === 0 ? 12 : today.getMonth();
+    const prevYear = today.getMonth() === 0 ? today.getFullYear() - 1 : today.getFullYear();
+    const alreadyExists = reports.some((r) => r.year === prevYear && r.month === prevMonth);
+
+    if (!alreadyExists) {
+      generateMonthlyReport(prevYear, prevMonth, bookings, barbers).then((report) => {
+        setReports((prev) => [report, ...prev]);
+      });
+    }
+  }, [bookings, barbers, reports]);
 
   const today = new Date().toISOString().split('T')[0];
   const todayBookings = bookings.filter((b) => b.date === today);
@@ -54,6 +78,26 @@ export default function AdminDashboard() {
   const maxRevenue = Math.max(...revenueData);
 
   const recentBookings = [...bookings].slice(0, 5);
+
+  const handleGenerateManual = async () => {
+    setGeneratingReport(true);
+    try {
+      const now = new Date();
+      const month = now.getMonth() + 1;
+      const year = now.getFullYear();
+      const report = await generateMonthlyReport(year, month, bookings, barbers);
+      setReports((prev) => {
+        const filtered = prev.filter((r) => !(r.year === year && r.month === month));
+        return [report, ...filtered];
+      });
+      setReportSuccess(true);
+      setTimeout(() => setReportSuccess(false), 3000);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setGeneratingReport(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -196,6 +240,87 @@ export default function AdminDashboard() {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* Monthly Reports Section */}
+      <div className="glass rounded-2xl border border-white/8 overflow-hidden">
+        <div
+          className="px-6 py-4 border-b border-white/8 flex items-center justify-between cursor-pointer"
+          onClick={() => setShowReports(!showReports)}
+        >
+          <div className="flex items-center gap-3">
+            <FileText size={18} className="text-gold" />
+            <h3 className="font-semibold text-white">Reportes Mensuales</h3>
+            {reports.length > 0 && (
+              <span className="text-xs bg-gold/20 text-gold px-2 py-0.5 rounded-full font-mono">
+                {reports.length}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={(e) => { e.stopPropagation(); handleGenerateManual(); }}
+              disabled={generatingReport}
+              className="text-xs px-3 py-1.5 rounded-lg border border-gold/30 text-gold hover:bg-gold/10 transition-colors disabled:opacity-50"
+            >
+              {generatingReport ? 'Generando...' : reportSuccess ? '✓ Guardado' : 'Generar reporte del mes'}
+            </button>
+            {showReports ? <ChevronUp size={16} className="text-zinc-400" /> : <ChevronDown size={16} className="text-zinc-400" />}
+          </div>
+        </div>
+
+        {showReports && (
+          <div className="p-6">
+            {reports.length === 0 ? (
+              <p className="text-zinc-500 text-sm text-center py-6">
+                No hay reportes aún. Los reportes se generan automáticamente el día 1 de cada mes, o puedes generarlo manualmente.
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {reports.map((report) => (
+                  <div key={report.id} className="glass rounded-xl p-4 border border-white/8 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-white font-semibold">
+                        {getMonthName(report.month)} {report.year}
+                      </h4>
+                      <span className="text-xs text-zinc-500 font-mono">
+                        #{String(report.month).padStart(2, '0')}/{report.year}
+                      </span>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-zinc-400 text-xs">Ingresos</span>
+                        <span className="text-gold font-mono font-bold text-sm">{formatCOP(report.totalRevenue)}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-zinc-400 text-xs">Reservas totales</span>
+                        <span className="text-white font-mono text-sm">{report.totalBookings}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-zinc-400 text-xs">Completadas</span>
+                        <span className="text-green-400 font-mono text-sm">{report.completedBookings}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-zinc-400 text-xs">Canceladas</span>
+                        <span className="text-red-400 font-mono text-sm">{report.cancelledBookings}</span>
+                      </div>
+                      <div className="pt-2 border-t border-white/8">
+                        <div className="flex justify-between items-center">
+                          <span className="text-zinc-400 text-xs">Barbero estrella</span>
+                          <span className="text-amber-400 text-xs font-medium">{report.starBarberName}</span>
+                        </div>
+                        <div className="flex justify-between items-center mt-1">
+                          <span className="text-zinc-400 text-xs">Servicios</span>
+                          <span className="text-zinc-300 font-mono text-xs">{report.starBarberServices}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
