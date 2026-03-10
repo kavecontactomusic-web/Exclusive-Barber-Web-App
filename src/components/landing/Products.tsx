@@ -37,10 +37,15 @@ export default function Products() {
                 <p className="text-zinc-500 text-sm mb-4 leading-relaxed">{product.description}</p>
                 <div className="flex items-center justify-between">
                   <span className="font-mono text-xl font-bold gold-text">{formatCOP(product.price)}</span>
-                  <button className="flex items-center gap-2 text-xs font-semibold text-dark bg-gold hover:bg-gold-100 px-4 py-2 rounded-full transition-all hover:scale-105">
+                  <a
+                    href={`https://wa.me/573144110530?text=Hola!%20Estoy%20interesado%20en%20este%20producto:%20${encodeURIComponent(product.name)}%20-%20${formatCOP(product.price)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-xs font-semibold text-dark bg-gold hover:bg-gold-100 px-4 py-2 rounded-full transition-all hover:scale-105"
+                  >
                     <ShoppingBag size={13} />
                     Comprar
-                  </button>
+                  </a>
                 </div>
               </div>
             </div>
