@@ -1,10 +1,18 @@
-const PASSWORD_KEY = 'eb_admin_password';
-const DEFAULT_PASSWORD = 'Admin2026';
+import { supabase } from '../lib/supabase';
 
 export async function getAdminPassword(): Promise<string> {
-  return localStorage.getItem(PASSWORD_KEY) || DEFAULT_PASSWORD;
+  const { data, error } = await supabase
+    .from('admin_config')
+    .select('value')
+    .eq('key', 'admin_password')
+    .single();
+  if (error) return 'Admin2026';
+  return data.value;
 }
 
 export async function updateAdminPassword(newPassword: string): Promise<void> {
-  localStorage.setItem(PASSWORD_KEY, newPassword);
+  await supabase
+    .from('admin_config')
+    .update({ value: newPassword, updated_at: new Date().toISOString() })
+    .eq('key', 'admin_password');
 }
