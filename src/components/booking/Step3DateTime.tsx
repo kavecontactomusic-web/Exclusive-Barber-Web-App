@@ -13,6 +13,18 @@ interface Props {
 const DAYS_ES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 const MONTHS_ES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
+// ✅ Función corregida: usa fecha local en vez de UTC
+function toLocalISO(d: Date): string {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getTodayLocal(): string {
+  return toLocalISO(new Date());
+}
+
 function getDates(count: number) {
   const dates = [];
   const today = new Date();
@@ -26,7 +38,7 @@ function getDates(count: number) {
 
 function generateSlots(date: string, occupiedTimes: string[]): { time: string; available: boolean }[] {
   const slots = [];
-  const today = new Date().toISOString().split('T')[0];
+  const today = getTodayLocal();
   const isToday = date === today;
   const now = new Date();
   const currentHour = now.getHours();
@@ -45,7 +57,7 @@ function generateSlots(date: string, occupiedTimes: string[]): { time: string; a
 
 export default function Step3DateTime({ barberId, selectedDate, selectedTime, onSelect, onBack }: Props) {
   const dates = getDates(14);
-  const [tempDate, setTempDate] = useState(selectedDate || dates[0].toISOString().split('T')[0]);
+  const [tempDate, setTempDate] = useState(selectedDate || toLocalISO(dates[0]));
   const [tempTime, setTempTime] = useState(selectedTime);
   const [occupiedTimes, setOccupiedTimes] = useState<string[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
@@ -78,9 +90,9 @@ export default function Step3DateTime({ barberId, selectedDate, selectedTime, on
 
       <div className="flex gap-2 overflow-x-auto pb-2 mb-6" style={{ scrollbarWidth: 'none' }}>
         {dates.map((d) => {
-          const iso = d.toISOString().split('T')[0];
+          const iso = toLocalISO(d);
           const isSelected = tempDate === iso;
-          const isToday = iso === new Date().toISOString().split('T')[0];
+          const isToday = iso === getTodayLocal();
 
           return (
             <button
