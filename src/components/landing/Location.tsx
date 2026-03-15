@@ -1,7 +1,16 @@
+import { useState, useEffect } from 'react';
 import { MapPin, Phone, Clock, Instagram, MessageCircle, Facebook } from 'lucide-react';
 import { businessConfig } from '../../config/business';
+import { getBusinessHours } from '../../services/businessHours';
+import type { BusinessHour } from '../../services/businessHours';
 
 export default function Location() {
+  const [hours, setHours] = useState<BusinessHour[]>(businessConfig.hours);
+
+  useEffect(() => {
+    getBusinessHours().then(setHours);
+  }, []);
+
   return (
     <section id="contacto" className="py-24">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
@@ -44,14 +53,14 @@ export default function Location() {
                 <p className="text-xs text-zinc-500 uppercase tracking-wider">Horarios</p>
               </div>
               <div className="space-y-2">
-                {businessConfig.hours.map((h) => (
+                {hours.map((h) => (
                   <div key={h.day} className="flex items-center justify-between">
                     <span className="text-zinc-400 text-sm">{h.day}</span>
                     {h.closed ? (
                       <span className="text-xs px-2.5 py-1 rounded-full status-busy">Cerrado</span>
                     ) : (
                       <span className="text-xs px-2.5 py-1 rounded-full status-available">
-                        {h.open} — {h.close}
+                        {h.open} – {h.close}
                       </span>
                     )}
                   </div>
@@ -102,11 +111,7 @@ export default function Location() {
               className="block w-full h-full"
             >
               <div className="relative w-full h-full bg-zinc-900" style={{ minHeight: '480px' }}>
-                <svg
-                  viewBox="0 0 800 480"
-                  className="w-full h-full"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
+                <svg viewBox="0 0 800 480" className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
                   <rect width="800" height="480" fill="#1a1a1a" />
                   <rect x="0" y="0" width="800" height="480" fill="url(#grid)" />
                   <defs>

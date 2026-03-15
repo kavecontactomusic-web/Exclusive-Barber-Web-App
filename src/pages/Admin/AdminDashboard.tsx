@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
-import { TrendingUp, Users, DollarSign, XCircle, UserPlus, Star, FileText, ChevronDown, ChevronUp } from 'lucide-react';
+import { TrendingUp, Users, DollarSign, XCircle, UserPlus, Star, FileText, ChevronDown, ChevronUp, Clock, Save, Loader2 } from 'lucide-react';
 import { getBookings } from '../../services/bookings';
 import { getBarbers } from '../../services/barbers';
 import { getServices } from '../../services/services';
 import { getMonthlyReports, generateMonthlyReport, getMonthName } from '../../services/monthlyReports';
+import { getBusinessHours, updateBusinessHours } from '../../services/businessHours';
 import { formatCOP } from '../../data';
 import type { Booking, Barber, Service } from '../../types';
 import type { MonthlyReport } from '../../services/monthlyReports';
+import type { BusinessHour } from '../../services/businessHours';
 
 const statusLabel: Record<string, string> = {
   pending: 'Pendiente',
@@ -27,14 +29,19 @@ export default function AdminDashboard() {
   const [generatingReport, setGeneratingReport] = useState(false);
   const [reportSuccess, setReportSuccess] = useState(false);
 
+  const [showHours, setShowHours] = useState(false);
+  const [hours, setHours] = useState<BusinessHour[]>([]);
+  const [savingHours, setSavingHours] = useState(false);
+  const [hoursSaved, setHoursSaved] = useState(false);
+
   useEffect(() => {
     getBookings().then(setBookings);
     getBarbers().then(setBarbers);
     getServices().then(setServices);
     getMonthlyReports().then(setReports);
+    getBusinessHours().then(setHours);
   }, []);
 
-  // Auto-generate report on first day of month
   useEffect(() => {
     if (bookings.length === 0 || barbers.length === 0) return;
     const today = new Date();
@@ -76,7 +83,6 @@ export default function AdminDashboard() {
   }));
   const maxCount = Math.max(...popularServices.map((s) => s.count), 1);
   const maxRevenue = Math.max(...revenueData);
-
   const recentBookings = [...bookings].slice(0, 5);
 
   const handleGenerateManual = async () => {
@@ -96,6 +102,23 @@ export default function AdminDashboard() {
       console.error(e);
     } finally {
       setGeneratingReport(false);
+    }
+  };
+
+  const handleHourChange = (index: number, field: keyof BusinessHour, value: string | boolean) => {
+    setHours((prev) => prev.map((h, i) => i === index ? { ...h, [field]: value } : h));
+  };
+
+  const handleSaveHours = async () => {
+    setSavingHours(true);
+    try {
+      await updateBusinessHours(hours);
+      setHoursSaved(true);
+      setTimeout(() => setHoursSaved(false), 3000);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSavingHours(false);
     }
   };
 
@@ -123,7 +146,7 @@ export default function AdminDashboard() {
         <div className="lg:col-span-2 glass rounded-2xl p-6 border border-white/8">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h3 className="font-semibold text-white">Ingresos — últimos 30 días</h3>
+              <h3 className="font-semibold text-white">Ingresos – últimos 30 días</h3>
               <p className="text-zinc-500 text-xs mt-0.5">Tendencia mensual</p>
             </div>
             <span className="text-xs font-mono text-gold glass-gold px-3 py-1.5 rounded-full border border-gold/20">
@@ -240,6 +263,79 @@ export default function AdminDashboard() {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* Horarios Editor */}
+      <div className="glass rounded-2xl border border-white/8 overflow-hidden">
+        <div
+          className="px-6 py-4 border-b border-white/8 flex items-center justify-between cursor-pointer"
+          onClick={() => setShowHours(!showHours)}
+        >
+          <div className="flex items-center gap-3">
+            <Clock size={18} className="text-gold" />
+            <h3 className="font-semibold text-white">Horarios de Atención</h3>
+          </div>
+          {showHours ? <ChevronUp size={16} className="text-zinc-400" /> : <ChevronDown size={16} className="text-zinc-400" />}
+        </div>
+
+        {showHours && (
+          <div className="p-6">
+            <p className="text-zinc-500 text-xs mb-5">Edita los horarios que verán tus clientes en la página web.</p>
+            <div className="space-y-3">
+              {hours.map((h, i) => (
+                <div key={h.day} className="flex items-center gap-3 glass rounded-xl px-4 py-3 border border-white/8">
+                  <span className="text-white text-sm font-medium w-24 shrink-0">{h.day}</span>
+
+                  <label className="flex items-center gap-2 shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={h.closed}
+                      onChange={(e) => handleHourChange(i, 'closed', e.target.checked)}
+                      className="w-4 h-4 accent-gold"
+                    />
+                    <span className="text-zinc-400 text-xs">Cerrado</span>
+                  </label>
+
+                  {!h.closed && (
+                    <div className="flex items-center gap-2 flex-1">
+                      <input
+                        type="time"
+                        value={h.open}
+                        onChange={(e) => handleHourChange(i, 'open', e.target.value)}
+                        className="bg-transparent border border-white/10 rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none focus:border-gold/40 w-full"
+                      />
+                      <span className="text-zinc-600 text-xs shrink-0">hasta</span>
+                      <input
+                        type="time"
+                        value={h.close}
+                        onChange={(e) => handleHourChange(i, 'close', e.target.value)}
+                        className="bg-transparent border border-white/10 rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none focus:border-gold/40 w-full"
+                      />
+                    </div>
+                  )}
+
+                  {h.closed && (
+                    <span className="text-xs px-2.5 py-1 rounded-full status-busy ml-auto">Cerrado</span>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <button
+              onClick={handleSaveHours}
+              disabled={savingHours}
+              className="mt-5 flex items-center gap-2 px-5 py-2.5 rounded-full bg-gold text-dark font-semibold text-sm hover:bg-gold/90 transition-all disabled:opacity-50"
+            >
+              {savingHours ? (
+                <><Loader2 size={15} className="animate-spin" /> Guardando...</>
+              ) : hoursSaved ? (
+                <>✓ Guardado</>
+              ) : (
+                <><Save size={15} /> Guardar Horarios</>
+              )}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Monthly Reports Section */}
