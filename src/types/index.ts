@@ -42,6 +42,7 @@ export interface Booking {
   date: string;
   time: string;
   price: number;
+  duration?: number;
   status: 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'no-show';
   createdAt: string;
 }
