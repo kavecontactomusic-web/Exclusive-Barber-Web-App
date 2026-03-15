@@ -76,6 +76,7 @@ export default function BookingModal({ isOpen, onClose, preselectedService }: Bo
         date: state.selectedDate,
         time: state.selectedTime,
         price: state.selectedService.price,
+        duration: state.selectedService.duration ?? 30,
         status: 'pending',
       });
       setSuccess(true);
@@ -118,6 +119,10 @@ export default function BookingModal({ isOpen, onClose, preselectedService }: Bo
             <div className="flex justify-between">
               <span className="text-zinc-500 text-sm">Hora</span>
               <span className="text-white text-sm font-medium">{state.selectedTime}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-zinc-500 text-sm">Duración</span>
+              <span className="text-white text-sm font-medium">{state.selectedService?.duration ?? 30} min</span>
             </div>
           </div>
           <button onClick={onClose} className="btn-gold w-full py-3 rounded-full font-semibold">
@@ -192,7 +197,7 @@ export default function BookingModal({ isOpen, onClose, preselectedService }: Bo
           {state.step === 2 && (
             <Step2Barber
               selected={state.selectedBarber}
-              onSelect={(b) => setState((prev) => ({ ...prev, selectedBarber: b, step: 3 }))}
+              onSelect={(b: Barber | null) => setState((prev) => ({ ...prev, selectedBarber: b, step: 3 }))}
               onBack={() => setState((prev) => ({ ...prev, step: 1 }))}
             />
           )}
@@ -201,6 +206,7 @@ export default function BookingModal({ isOpen, onClose, preselectedService }: Bo
               barberId={state.selectedBarber?.id || ''}
               selectedDate={state.selectedDate}
               selectedTime={state.selectedTime}
+              serviceDuration={state.selectedService?.duration ?? 30}
               onSelect={(date, time) => setState((prev) => ({ ...prev, selectedDate: date, selectedTime: time, step: 4 }))}
               onBack={() => setState((prev) => ({ ...prev, step: 2 }))}
             />

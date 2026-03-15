@@ -6,6 +6,7 @@ interface Props {
   barberId: string;
   selectedDate: string;
   selectedTime: string;
+  serviceDuration: number;
   onSelect: (date: string, time: string) => void;
   onBack: () => void;
 }
@@ -13,7 +14,6 @@ interface Props {
 const DAYS_ES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 const MONTHS_ES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
-// ✅ Función corregida: usa fecha local en vez de UTC
 function toLocalISO(d: Date): string {
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -36,41 +36,60 @@ function getDates(count: number) {
   return dates;
 }
 
-function generateSlots(date: string, occupiedTimes: string[]): { time: string; available: boolean }[] {
+function timeToMinutes(time: string): number {
+  const [h, m] = time.split(':').map(Number);
+  return h * 60 + m;
+}
+
+function generateSlots(
+  date: string,
+  occupiedSlots: { time: string; duration: number }[],
+  serviceDuration: number
+): { time: string; available: boolean }[] {
   const slots = [];
   const today = getTodayLocal();
   const isToday = date === today;
   const now = new Date();
-  const currentHour = now.getHours();
-  const currentMin = now.getMinutes();
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
   for (let hour = 9; hour < 18; hour++) {
     for (let min = 0; min < 60; min += 30) {
       const timeStr = `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
-      const occupied = occupiedTimes.includes(timeStr);
-      const isPast = isToday && (hour < currentHour || (hour === currentHour && min <= currentMin));
-      slots.push({ time: timeStr, available: !occupied && !isPast });
+      const slotStart = timeToMinutes(timeStr);
+      const slotEnd = slotStart + serviceDuration;
+
+      const isPast = isToday && slotStart <= currentMinutes;
+
+      const isOccupied = occupiedSlots.some(({ time, duration }) => {
+        const bookedStart = timeToMinutes(time);
+        const bookedEnd = bookedStart + duration;
+        return slotStart < bookedEnd && slotEnd > bookedStart;
+      });
+
+      const exceedsClosing = slotEnd > timeToMinutes('18:00');
+
+      slots.push({ time: timeStr, available: !isPast && !isOccupied && !exceedsClosing });
     }
   }
   return slots;
 }
 
-export default function Step3DateTime({ barberId, selectedDate, selectedTime, onSelect, onBack }: Props) {
+export default function Step3DateTime({ barberId, selectedDate, selectedTime, serviceDuration, onSelect, onBack }: Props) {
   const dates = getDates(14);
   const [tempDate, setTempDate] = useState(selectedDate || toLocalISO(dates[0]));
   const [tempTime, setTempTime] = useState(selectedTime);
-  const [occupiedTimes, setOccupiedTimes] = useState<string[]>([]);
+  const [occupiedSlots, setOccupiedSlots] = useState<{ time: string; duration: number }[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
 
   useEffect(() => {
     if (!tempDate || !barberId) return;
     setLoadingSlots(true);
     getOccupiedSlotsForBarberAndDate(barberId, tempDate)
-      .then(setOccupiedTimes)
+      .then(setOccupiedSlots)
       .finally(() => setLoadingSlots(false));
   }, [tempDate, barberId]);
 
-  const slots = generateSlots(tempDate, occupiedTimes);
+  const slots = generateSlots(tempDate, occupiedSlots, serviceDuration);
 
   const handleContinue = () => {
     if (tempDate && tempTime) {
@@ -121,7 +140,10 @@ export default function Step3DateTime({ barberId, selectedDate, selectedTime, on
         })}
       </div>
 
-      <h4 className="text-xs text-zinc-500 uppercase tracking-wider mb-3">Horarios disponibles</h4>
+      <div className="flex items-center justify-between mb-3">
+        <h4 className="text-xs text-zinc-500 uppercase tracking-wider">Horarios disponibles</h4>
+        <span className="text-xs text-zinc-600">{serviceDuration} min por turno</span>
+      </div>
 
       {loadingSlots ? (
         <div className="flex items-center justify-center py-8">

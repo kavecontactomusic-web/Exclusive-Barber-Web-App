@@ -13,6 +13,7 @@ interface BookingRow {
   date: string;
   time: string;
   price: number;
+  duration: number;
   status: string;
   created_at: string;
 }
@@ -30,6 +31,7 @@ function rowToBooking(row: BookingRow): Booking {
     date: row.date,
     time: row.time,
     price: row.price,
+    duration: row.duration ?? 30,
     status: row.status as Booking['status'],
     createdAt: row.created_at,
   };
@@ -80,6 +82,7 @@ export async function createBooking(booking: Omit<Booking, 'id' | 'createdAt'>):
       date: booking.date,
       time: booking.time,
       price: booking.price,
+      duration: booking.duration ?? 30,
       status: booking.status,
     })
     .select()
@@ -130,13 +133,19 @@ export async function getBookingsByYear(year: number): Promise<Booking[]> {
   return (data as BookingRow[]).map(rowToBooking);
 }
 
-export async function getOccupiedSlotsForBarberAndDate(barberId: string, date: string): Promise<string[]> {
+export async function getOccupiedSlotsForBarberAndDate(
+  barberId: string,
+  date: string
+): Promise<{ time: string; duration: number }[]> {
   const { data, error } = await supabase
     .from('bookings')
-    .select('time')
+    .select('time, duration')
     .eq('barber_id', barberId)
     .eq('date', date)
     .in('status', ['pending', 'confirmed']);
   if (error) throw error;
-  return (data as { time: string }[]).map((row) => row.time);
+  return (data as { time: string; duration: number }[]).map((row) => ({
+    time: row.time,
+    duration: row.duration ?? 30,
+  }));
 }
