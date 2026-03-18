@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Search, Filter, Download, ChevronDown, Loader2 } from 'lucide-react';
-import { getBookings, updateBookingStatus } from '../../services/bookings';
+import { Search, Filter, Download, ChevronDown, Loader2, Trash2 } from 'lucide-react';
+import { getBookings, updateBookingStatus, deleteBooking } from '../../services/bookings';
 import { formatCOP } from '../../data';
 import type { Booking } from '../../types';
 
@@ -17,6 +17,7 @@ export default function AdminBookings() {
   const [statusFilter, setStatusFilter] = useState('todos');
   const [list, setList] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     getBookings()
@@ -34,6 +35,19 @@ export default function AdminBookings() {
   const changeStatus = async (id: string, newStatus: Booking['status']) => {
     setList((prev) => prev.map((b) => b.id === id ? { ...b, status: newStatus } : b));
     await updateBookingStatus(id, newStatus);
+  };
+
+  const handleDelete = async (id: string, clientName: string) => {
+    if (!confirm(`¿Eliminar la reserva de ${clientName}? Esta acción no se puede deshacer.`)) return;
+    setDeletingId(id);
+    try {
+      await deleteBooking(id);
+      setList((prev) => prev.filter((b) => b.id !== id));
+    } catch (err) {
+      alert('Error al eliminar la reserva. Intenta de nuevo.');
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const exportCSV = () => {
@@ -108,7 +122,7 @@ export default function AdminBookings() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-white/8">
-                  {['ID', 'Cliente', 'Servicio', 'Barbero', 'Fecha', 'Hora', 'Total', 'Estado', 'Acción'].map((h) => (
+                  {['ID', 'Cliente', 'Servicio', 'Barbero', 'Fecha', 'Hora', 'Total', 'Estado', 'Acción', ''].map((h) => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider whitespace-nowrap">
                       {h}
                     </th>
@@ -149,6 +163,19 @@ export default function AdminBookings() {
                           <option value="no-show" className="bg-dark">No asistió</option>
                         </select>
                       </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <button
+                        onClick={() => handleDelete(b.id, b.clientName)}
+                        disabled={deletingId === b.id}
+                        className="p-1.5 rounded-lg text-zinc-600 hover:text-red-400 hover:bg-red-400/10 transition-colors disabled:opacity-40"
+                        title="Eliminar reserva"
+                      >
+                        {deletingId === b.id
+                          ? <Loader2 size={14} className="animate-spin" />
+                          : <Trash2 size={14} />
+                        }
+                      </button>
                     </td>
                   </tr>
                 ))}
