@@ -14,6 +14,17 @@ interface Props {
 const DAYS_ES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 const MONTHS_ES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
+// Horario por día de la semana (0=Dom, 1=Lun, ..., 6=Sáb)
+const SCHEDULE: Record<number, { open: string; close: string; lunch?: { start: string; end: string } }> = {
+  0: { open: '10:00', close: '15:00' },                                          // Domingo
+  1: { open: '08:30', close: '19:00', lunch: { start: '12:00', end: '13:00' } }, // Lunes
+  2: { open: '08:30', close: '19:00', lunch: { start: '12:00', end: '13:00' } }, // Martes
+  3: { open: '08:30', close: '19:00', lunch: { start: '12:00', end: '13:00' } }, // Miércoles
+  4: { open: '08:30', close: '19:00', lunch: { start: '12:00', end: '13:00' } }, // Jueves
+  5: { open: '08:30', close: '19:00', lunch: { start: '12:00', end: '13:00' } }, // Viernes
+  6: { open: '08:30', close: '19:00', lunch: { start: '12:00', end: '13:00' } }, // Sábado
+};
+
 function toLocalISO(d: Date): string {
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -52,25 +63,49 @@ function generateSlots(
   const now = new Date();
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
-  for (let hour = 9; hour < 18; hour++) {
-    for (let min = 0; min < 60; min += 30) {
-      const timeStr = `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
-      const slotStart = timeToMinutes(timeStr);
-      const slotEnd = slotStart + serviceDuration;
+  // Obtener día de la semana para esta fecha
+  const dateObj = new Date(date + 'T12:00:00');
+  const dayOfWeek = dateObj.getDay();
+  const schedule = SCHEDULE[dayOfWeek];
 
-      const isPast = isToday && slotStart <= currentMinutes;
+  if (!schedule) return [];
 
-      const isOccupied = occupiedSlots.some(({ time, duration }) => {
-        const bookedStart = timeToMinutes(time);
-        const bookedEnd = bookedStart + duration;
-        return slotStart < bookedEnd && slotEnd > bookedStart;
-      });
+  const openMinutes = timeToMinutes(schedule.open);
+  const closeMinutes = timeToMinutes(schedule.close);
+  const lunchStart = schedule.lunch ? timeToMinutes(schedule.lunch.start) : null;
+  const lunchEnd = schedule.lunch ? timeToMinutes(schedule.lunch.end) : null;
 
-      const exceedsClosing = slotEnd > timeToMinutes('18:00');
+  // Generar slots de 15 en 15 minutos
+  for (let minutes = openMinutes; minutes < closeMinutes; minutes += 15) {
+    const hour = Math.floor(minutes / 60);
+    const min = minutes % 60;
+    const timeStr = `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
+    const slotStart = minutes;
+    const slotEnd = slotStart + serviceDuration;
 
-      slots.push({ time: timeStr, available: !isPast && !isOccupied && !exceedsClosing });
-    }
+    // Pasado (solo hoy)
+    const isPast = isToday && slotStart <= currentMinutes;
+
+    // Supera el cierre
+    const exceedsClosing = slotEnd > closeMinutes;
+
+    // Cruza el almuerzo
+    const crossesLunch = lunchStart !== null && lunchEnd !== null &&
+      slotStart < lunchEnd && slotEnd > lunchStart;
+
+    // Ocupado por otra reserva
+    const isOccupied = occupiedSlots.some(({ time, duration }) => {
+      const bookedStart = timeToMinutes(time);
+      const bookedEnd = bookedStart + duration;
+      return slotStart < bookedEnd && slotEnd > bookedStart;
+    });
+
+    slots.push({
+      time: timeStr,
+      available: !isPast && !exceedsClosing && !crossesLunch && !isOccupied,
+    });
   }
+
   return slots;
 }
 
@@ -149,6 +184,8 @@ export default function Step3DateTime({ barberId, selectedDate, selectedTime, se
         <div className="flex items-center justify-center py-8">
           <Loader2 size={20} className="animate-spin text-gold" />
         </div>
+      ) : slots.length === 0 ? (
+        <p className="text-zinc-500 text-sm text-center py-8">No hay horarios disponibles para este día</p>
       ) : (
         <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 mb-6">
           {slots.map(({ time, available }) => (
