@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { ChevronLeft, Loader2 } from 'lucide-react';
 import { getOccupiedSlotsForBarberAndDate } from '../../services/bookings';
+import { getSchedule } from '../../services/schedule';
+import type { DaySchedule } from '../../services/schedule';
 
 interface Props {
   barberId: string;
@@ -13,17 +15,6 @@ interface Props {
 
 const DAYS_ES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 const MONTHS_ES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-
-// Horario por día de la semana (0=Dom, 1=Lun, ..., 6=Sáb)
-const SCHEDULE: Record<number, { open: string; close: string; lunch?: { start: string; end: string } }> = {
-  0: { open: '10:00', close: '15:00' },                                          // Domingo
-  1: { open: '08:30', close: '19:00', lunch: { start: '12:00', end: '13:00' } }, // Lunes
-  2: { open: '08:30', close: '19:00', lunch: { start: '12:00', end: '13:00' } }, // Martes
-  3: { open: '08:30', close: '19:00', lunch: { start: '12:00', end: '13:00' } }, // Miércoles
-  4: { open: '08:30', close: '19:00', lunch: { start: '12:00', end: '13:00' } }, // Jueves
-  5: { open: '08:30', close: '19:00', lunch: { start: '12:00', end: '13:00' } }, // Viernes
-  6: { open: '08:30', close: '19:00', lunch: { start: '12:00', end: '13:00' } }, // Sábado
-};
 
 function toLocalISO(d: Date): string {
   const year = d.getFullYear();
@@ -55,27 +46,26 @@ function timeToMinutes(time: string): number {
 function generateSlots(
   date: string,
   occupiedSlots: { time: string; duration: number }[],
-  serviceDuration: number
+  serviceDuration: number,
+  schedule: DaySchedule[]
 ): { time: string; available: boolean }[] {
+  const dateObj = new Date(date + 'T12:00:00');
+  const dayOfWeek = dateObj.getDay();
+  const daySchedule = schedule.find((s) => s.day_of_week === dayOfWeek);
+
+  if (!daySchedule || !daySchedule.is_open) return [];
+
   const slots = [];
   const today = getTodayLocal();
   const isToday = date === today;
   const now = new Date();
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
-  // Obtener día de la semana para esta fecha
-  const dateObj = new Date(date + 'T12:00:00');
-  const dayOfWeek = dateObj.getDay();
-  const schedule = SCHEDULE[dayOfWeek];
+  const openMinutes = timeToMinutes(daySchedule.open_time);
+  const closeMinutes = timeToMinutes(daySchedule.close_time);
+  const lunchStart = daySchedule.lunch_start ? timeToMinutes(daySchedule.lunch_start) : null;
+  const lunchEnd = daySchedule.lunch_end ? timeToMinutes(daySchedule.lunch_end) : null;
 
-  if (!schedule) return [];
-
-  const openMinutes = timeToMinutes(schedule.open);
-  const closeMinutes = timeToMinutes(schedule.close);
-  const lunchStart = schedule.lunch ? timeToMinutes(schedule.lunch.start) : null;
-  const lunchEnd = schedule.lunch ? timeToMinutes(schedule.lunch.end) : null;
-
-  // Generar slots de 15 en 15 minutos
   for (let minutes = openMinutes; minutes < closeMinutes; minutes += 15) {
     const hour = Math.floor(minutes / 60);
     const min = minutes % 60;
@@ -83,17 +73,10 @@ function generateSlots(
     const slotStart = minutes;
     const slotEnd = slotStart + serviceDuration;
 
-    // Pasado (solo hoy)
     const isPast = isToday && slotStart <= currentMinutes;
-
-    // Supera el cierre
     const exceedsClosing = slotEnd > closeMinutes;
-
-    // Cruza el almuerzo
     const crossesLunch = lunchStart !== null && lunchEnd !== null &&
       slotStart < lunchEnd && slotEnd > lunchStart;
-
-    // Ocupado por otra reserva
     const isOccupied = occupiedSlots.some(({ time, duration }) => {
       const bookedStart = timeToMinutes(time);
       const bookedEnd = bookedStart + duration;
@@ -115,6 +98,11 @@ export default function Step3DateTime({ barberId, selectedDate, selectedTime, se
   const [tempTime, setTempTime] = useState(selectedTime);
   const [occupiedSlots, setOccupiedSlots] = useState<{ time: string; duration: number }[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
+  const [schedule, setSchedule] = useState<DaySchedule[]>([]);
+
+  useEffect(() => {
+    getSchedule().then(setSchedule);
+  }, []);
 
   useEffect(() => {
     if (!tempDate || !barberId) return;
@@ -124,13 +112,19 @@ export default function Step3DateTime({ barberId, selectedDate, selectedTime, se
       .finally(() => setLoadingSlots(false));
   }, [tempDate, barberId]);
 
-  const slots = generateSlots(tempDate, occupiedSlots, serviceDuration);
+  const slots = generateSlots(tempDate, occupiedSlots, serviceDuration, schedule);
 
   const handleContinue = () => {
     if (tempDate && tempTime) {
       onSelect(tempDate, tempTime);
     }
   };
+
+  // Verificar si el día está cerrado
+  const dateObj = new Date(tempDate + 'T12:00:00');
+  const dayOfWeek = dateObj.getDay();
+  const daySchedule = schedule.find((s) => s.day_of_week === dayOfWeek);
+  const isDayClosed = daySchedule && !daySchedule.is_open;
 
   return (
     <div>
@@ -147,16 +141,22 @@ export default function Step3DateTime({ barberId, selectedDate, selectedTime, se
           const iso = toLocalISO(d);
           const isSelected = tempDate === iso;
           const isToday = iso === getTodayLocal();
+          const dow = d.getDay();
+          const daySched = schedule.find((s) => s.day_of_week === dow);
+          const closed = daySched && !daySched.is_open;
 
           return (
             <button
               key={iso}
               onClick={() => { setTempDate(iso); setTempTime(''); }}
               className={`flex flex-col items-center px-3 py-3 rounded-xl border shrink-0 min-w-[56px] transition-all ${
-                isSelected
+                closed
+                  ? 'border-white/5 opacity-40 cursor-not-allowed'
+                  : isSelected
                   ? 'border-gold bg-gold/15 shadow-gold'
                   : 'border-white/8 glass hover:border-white/20'
               }`}
+              disabled={!!closed}
             >
               <span className={`text-[10px] font-semibold uppercase ${isSelected ? 'text-gold' : 'text-zinc-500'}`}>
                 {DAYS_ES[d.getDay()]}
@@ -167,9 +167,7 @@ export default function Step3DateTime({ barberId, selectedDate, selectedTime, se
               <span className={`text-[10px] ${isSelected ? 'text-gold/70' : 'text-zinc-600'}`}>
                 {MONTHS_ES[d.getMonth()]}
               </span>
-              {isToday && (
-                <span className="w-1 h-1 rounded-full bg-gold mt-1" />
-              )}
+              {isToday && <span className="w-1 h-1 rounded-full bg-gold mt-1" />}
             </button>
           );
         })}
@@ -184,6 +182,8 @@ export default function Step3DateTime({ barberId, selectedDate, selectedTime, se
         <div className="flex items-center justify-center py-8">
           <Loader2 size={20} className="animate-spin text-gold" />
         </div>
+      ) : isDayClosed ? (
+        <p className="text-zinc-500 text-sm text-center py-8">Este día está cerrado</p>
       ) : slots.length === 0 ? (
         <p className="text-zinc-500 text-sm text-center py-8">No hay horarios disponibles para este día</p>
       ) : (
