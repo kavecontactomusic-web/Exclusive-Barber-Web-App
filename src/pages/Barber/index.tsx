@@ -17,11 +17,20 @@ const STATUS_LABELS: Record<string, string> = {
 
 const MONTHS_ES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 
+// Fix timezone — usa fecha local, no UTC
+function getTodayLocal(): string {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function BarberDashboard({ barber, onLogout }: { barber: Barber; onLogout: () => void }) {
   const [tab, setTab] = useState<BarberTab>('agenda');
   const [todayAppts, setTodayAppts] = useState<Booking[]>([]);
   const [allAppts, setAllAppts] = useState<Booking[]>([]);
-  const today = new Date().toISOString().split('T')[0];
+  const today = getTodayLocal();
   const currentYearMonth = today.slice(0, 7);
   const currentMonthName = MONTHS_ES[new Date().getMonth()];
 
@@ -33,7 +42,12 @@ function BarberDashboard({ barber, onLogout }: { barber: Barber; onLogout: () =>
   const completedToday = todayAppts.filter((b) => b.status === 'completed');
   const earningsToday = completedToday.reduce((s, b) => s + b.price, 0);
   const commissionToday = Math.round(earningsToday * barber.commission / 100);
+
+  // Mes actual — todas las reservas completadas del mes
   const monthAppts = allAppts.filter((b) => b.date.startsWith(currentYearMonth));
+  const monthCompleted = monthAppts.filter((b) => b.status === 'completed');
+  const monthEarnings = monthCompleted.reduce((s, b) => s + b.price, 0);
+  const monthCommission = Math.round(monthEarnings * barber.commission / 100);
 
   const updateStatus = async (id: string, status: Booking['status']) => {
     await updateBookingStatus(id, status);
@@ -150,7 +164,7 @@ function BarberDashboard({ barber, onLogout }: { barber: Barber; onLogout: () =>
               </div>
             </div>
 
-            <p className="section-label text-[10px] px-1">Servicios Completados</p>
+            <p className="section-label text-[10px] px-1">Servicios Completados Hoy</p>
             {completedToday.length === 0 ? (
               <div className="text-center py-8 text-zinc-600 text-sm">Sin servicios completados hoy</div>
             ) : (
@@ -174,15 +188,19 @@ function BarberDashboard({ barber, onLogout }: { barber: Barber; onLogout: () =>
           <div className="space-y-4">
             <div className="glass-gold rounded-xl p-4 border border-gold/20 grid grid-cols-2 gap-4">
               <div className="text-center">
-                <p className="font-mono text-2xl font-bold text-white">{monthAppts.length}</p>
-                <p className="text-zinc-500 text-xs">Servicios {currentMonthName}</p>
+                <p className="font-mono text-2xl font-bold text-white">{monthCompleted.length}</p>
+                <p className="text-zinc-500 text-xs">Completados {currentMonthName}</p>
               </div>
               <div className="text-center">
-                <p className="font-mono text-sm font-bold gold-text">
-                  {formatCOP(monthAppts.reduce((s, b) => s + b.price, 0))}
-                </p>
+                <p className="font-mono text-sm font-bold gold-text">{formatCOP(monthEarnings)}</p>
                 <p className="text-zinc-500 text-xs">Facturado</p>
               </div>
+            </div>
+
+            {/* Comisión del mes */}
+            <div className="glass rounded-xl p-4 border border-green-500/20 text-center">
+              <p className="font-mono text-xl font-bold text-green-400">{formatCOP(monthCommission)}</p>
+              <p className="text-zinc-400 text-xs mt-1">Tu comisión ({barber.commission}%) — {currentMonthName}</p>
             </div>
 
             <p className="section-label text-[10px] px-1">Historial Completo</p>
@@ -228,11 +246,11 @@ function BarberDashboard({ barber, onLogout }: { barber: Barber; onLogout: () =>
 
             <div className="grid grid-cols-3 gap-3">
               <div className="glass rounded-xl p-4 text-center border border-white/8">
-                <p className="font-mono text-xl font-bold text-white">{barber.totalServicesMonth}</p>
+                <p className="font-mono text-xl font-bold text-white">{monthCompleted.length}</p>
                 <p className="text-zinc-600 text-xs">Servicios</p>
               </div>
               <div className="glass rounded-xl p-4 text-center border border-white/8">
-                <p className="font-mono text-xs font-bold gold-text">{formatCOP(barber.earningsMonth)}</p>
+                <p className="font-mono text-xs font-bold gold-text">{formatCOP(monthEarnings)}</p>
                 <p className="text-zinc-600 text-xs">Ingresos</p>
               </div>
               <div className="glass rounded-xl p-4 text-center border border-white/8">
