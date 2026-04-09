@@ -31,4 +31,9 @@ export default defineConfig({
     exclude: ['lucide-react'],
   },
   publicDir: false,
+  resolve: {
+    alias: {
+      './phoenix/socketAdapter': path.resolve(__dirname, 'src/lib/phoenixStub.ts'),
+    },
+  },
 });
