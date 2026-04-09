@@ -31,12 +31,4 @@ export default defineConfig({
     exclude: ['lucide-react'],
   },
   publicDir: false,
-  resolve: {
-    alias: [
-      {
-        find: /^\.\/phoenix\/.*/,
-        replacement: path.resolve(__dirname, 'src/lib/phoenixStub.ts'),
-      },
-    ],
-  },
 });
