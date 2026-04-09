@@ -32,8 +32,11 @@ export default defineConfig({
   },
   publicDir: false,
   resolve: {
-    alias: {
-      './phoenix/socketAdapter': path.resolve(__dirname, 'src/lib/phoenixStub.ts'),
-    },
+    alias: [
+      {
+        find: /^\.\/phoenix\/.*/,
+        replacement: path.resolve(__dirname, 'src/lib/phoenixStub.ts'),
+      },
+    ],
   },
 });
