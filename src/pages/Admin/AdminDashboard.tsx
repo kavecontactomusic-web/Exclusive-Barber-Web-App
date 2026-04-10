@@ -59,19 +59,33 @@ export default function AdminDashboard() {
   }, [bookings, barbers, reports]);
 
   const today = new Date().toISOString().split('T')[0];
+  const currentYearMonth = new Date().toISOString().slice(0, 7);
+
   const todayBookings = bookings.filter((b) => b.date === today);
   const todayRevenue = todayBookings.filter((b) => b.status === 'completed').reduce((sum, b) => sum + b.price, 0);
   const cancelledCount = bookings.filter((b) => b.status === 'cancelled').length;
 
+  // Barbero estrella calculado dinámicamente desde reservas reales
   const starBarber = barbers.reduce<Barber | null>((best, b) => {
-    if (!best) return b;
-    return b.totalServicesMonth > best.totalServicesMonth ? b : best;
+    const bServices = bookings.filter(
+      (x) => x.barberId === b.id && x.date.startsWith(currentYearMonth) && x.status === 'completed'
+    ).length;
+    const bestServices = best
+      ? bookings.filter(
+          (x) => x.barberId === best.id && x.date.startsWith(currentYearMonth) && x.status === 'completed'
+        ).length
+      : -1;
+    return bServices > bestServices ? b : best;
   }, null);
+
+  const starBarberServices = bookings.filter(
+    (x) => x.barberId === starBarber?.id && x.date.startsWith(currentYearMonth) && x.status === 'completed'
+  ).length;
 
   const kpis = [
     { label: 'Citas Hoy', value: String(todayBookings.length), sub: 'total programadas', icon: TrendingUp, color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/20' },
     { label: 'Ingresos Hoy', value: formatCOP(todayRevenue), sub: 'servicios completados', icon: DollarSign, color: 'text-gold', bg: 'bg-gold/10 border-gold/20' },
-    { label: 'Barbero Estrella', value: starBarber?.shortName ?? '—', sub: `${starBarber?.totalServicesMonth ?? 0} servicios este mes`, icon: Star, color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/20' },
+    { label: 'Barbero Estrella', value: starBarber?.shortName ?? '—', sub: `${starBarberServices} servicios este mes`, icon: Star, color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/20' },
     { label: 'Cancelaciones', value: String(cancelledCount), sub: 'total registradas', icon: XCircle, color: 'text-red-400', bg: 'bg-red-500/10 border-red-500/20' },
     { label: 'Total Clientes', value: String(new Set(bookings.map((b) => b.clientPhone)).size), sub: 'clientes únicos', icon: UserPlus, color: 'text-green-400', bg: 'bg-green-500/10 border-green-500/20' },
     { label: 'Total Reservas', value: String(bookings.length), sub: 'en el sistema', icon: Users, color: 'text-cyan-400', bg: 'bg-cyan-500/10 border-cyan-500/20' },
@@ -233,36 +247,57 @@ export default function AdminDashboard() {
         </div>
       </div>
 
+      {/* Tarjetas de barberos con comisiones calculadas dinámicamente */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {barbers.map((barber) => (
-          <div key={barber.id} className="glass rounded-2xl p-5 border border-white/8">
-            <div className="flex items-center gap-3 mb-4">
-              <div
-                className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-dark shrink-0"
-                style={{ background: 'linear-gradient(135deg, #D4AF37, #9C7B22)' }}
-              >
-                {barber.avatar}
+        {barbers.map((barber) => {
+          const barberBookings = bookings.filter(
+            (b) => b.barberId === barber.id &&
+                   b.date.startsWith(currentYearMonth) &&
+                   b.status === 'completed'
+          );
+          const realServices = barberBookings.length;
+          const realEarnings = barberBookings.reduce((s, b) => s + b.price, 0);
+          const barberCommission = Math.round(realEarnings * barber.commission / 100);
+          const shopEarnings = realEarnings - barberCommission;
+
+          return (
+            <div key={barber.id} className="glass rounded-2xl p-5 border border-white/8">
+              <div className="flex items-center gap-3 mb-4">
+                <div
+                  className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-dark shrink-0"
+                  style={{ background: 'linear-gradient(135deg, #D4AF37, #9C7B22)' }}
+                >
+                  {barber.avatar}
+                </div>
+                <div>
+                  <p className="text-white font-medium text-sm">{barber.name}</p>
+                  <div className="flex items-center gap-1">
+                    <Star size={11} className="text-gold fill-gold" />
+                    <span className="text-xs text-zinc-400">{barber.rating}</span>
+                  </div>
+                </div>
               </div>
-              <div>
-                <p className="text-white font-medium text-sm">{barber.name}</p>
-                <div className="flex items-center gap-1">
-                  <Star size={11} className="text-gold fill-gold" />
-                  <span className="text-xs text-zinc-400">{barber.rating}</span>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="glass rounded-xl p-3 text-center">
+                  <p className="font-mono text-lg font-bold text-white">{realServices}</p>
+                  <p className="text-zinc-600 text-xs">Servicios</p>
+                </div>
+                <div className="glass rounded-xl p-3 text-center">
+                  <p className="font-mono text-sm font-bold gold-text">{formatCOP(realEarnings)}</p>
+                  <p className="text-zinc-600 text-xs">Facturado</p>
+                </div>
+                <div className="glass rounded-xl p-3 text-center border border-green-500/20">
+                  <p className="font-mono text-sm font-bold text-green-400">{formatCOP(barberCommission)}</p>
+                  <p className="text-zinc-600 text-xs">Barbero ({barber.commission}%)</p>
+                </div>
+                <div className="glass rounded-xl p-3 text-center border border-gold/20">
+                  <p className="font-mono text-sm font-bold gold-text">{formatCOP(shopEarnings)}</p>
+                  <p className="text-zinc-600 text-xs">Barbería ({100 - barber.commission}%)</p>
                 </div>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="glass rounded-xl p-3 text-center">
-                <p className="font-mono text-lg font-bold text-white">{barber.totalServicesMonth}</p>
-                <p className="text-zinc-600 text-xs">Servicios</p>
-              </div>
-              <div className="glass rounded-xl p-3 text-center">
-                <p className="font-mono text-sm font-bold gold-text">{formatCOP(barber.earningsMonth)}</p>
-                <p className="text-zinc-600 text-xs">Ingresos</p>
-              </div>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Horarios Editor */}
