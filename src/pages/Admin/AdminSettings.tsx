@@ -3,6 +3,7 @@ import { Save, Lock, Eye, EyeOff, CheckCircle, Loader2, Clock } from 'lucide-rea
 import { businessConfig } from '../../config/business';
 import { updateAdminPassword, getAdminPassword } from '../../services/adminConfig';
 import { getSchedule, updateDaySchedule } from '../../services/schedule';
+import { getBookingRules, updateBookingRules } from '../../services/bookingRules';
 import type { DaySchedule } from '../../services/schedule';
 
 const TIME_OPTIONS: string[] = [];
@@ -20,15 +21,50 @@ export default function AdminSettings() {
     email: businessConfig.email,
     instagram: businessConfig.instagram,
     whatsapp: businessConfig.whatsapp,
-    slotDuration: '30',
-    minAdvance: '1',
-    maxAhead: '14',
     whatsappReminder24: true,
     whatsappReminder2: true,
     emailConfirmation: true,
   });
 
+  // Reglas de reserva — estado separado
+  const [rules, setRules] = useState({
+    slotDuration: '30',
+    minAdvance: '1',
+    maxAhead: '14',
+  });
+  const [savingRules, setSavingRules] = useState(false);
+  const [rulesSaved, setRulesSaved] = useState(false);
+
+  useEffect(() => {
+    getBookingRules().then((r) => {
+      setRules({
+        slotDuration: String(r.slotDuration),
+        minAdvance: String(r.minAdvanceHours),
+        maxAhead: String(r.maxAheadDays),
+      });
+    });
+  }, []);
+
+  const handleSaveRules = async () => {
+    setSavingRules(true);
+    try {
+      await updateBookingRules({
+        slotDuration: Number(rules.slotDuration),
+        minAdvanceHours: Number(rules.minAdvance),
+        maxAheadDays: Number(rules.maxAhead),
+      });
+      setRulesSaved(true);
+      setTimeout(() => setRulesSaved(false), 3000);
+    } catch (e) {
+      console.error(e);
+      alert('Error al guardar las reglas. Intenta de nuevo.');
+    } finally {
+      setSavingRules(false);
+    }
+  };
+
   const update = (k: string, v: string | boolean) => setForm((f) => ({ ...f, [k]: v }));
+  const updateRule = (k: string, v: string) => setRules((r) => ({ ...r, [k]: v }));
 
   const [saved, setSaved] = useState(false);
   const handleSave = () => {
@@ -227,9 +263,10 @@ export default function AdminSettings() {
         )}
       </div>
 
+      {/* Reglas de Reserva — guarda en Supabase */}
       <div className="glass rounded-2xl p-6 border border-white/8">
         <h3 className="font-semibold text-white mb-5">Reglas de Reserva</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
           {[
             { key: 'slotDuration', label: 'Duración del turno (min)', opts: ['15', '30', '45', '60'] },
             { key: 'minAdvance', label: 'Anticipación mínima (h)', opts: ['1', '2', '4', '12', '24'] },
@@ -238,8 +275,8 @@ export default function AdminSettings() {
             <div key={key}>
               <label className="text-xs text-zinc-500 uppercase tracking-wider block mb-2">{label}</label>
               <select
-                value={form[key as keyof typeof form] as string}
-                onChange={(e) => update(key, e.target.value)}
+                value={rules[key as keyof typeof rules]}
+                onChange={(e) => updateRule(key, e.target.value)}
                 className="w-full px-4 py-2.5 glass border border-white/10 rounded-xl text-white text-sm focus:outline-none appearance-none bg-transparent cursor-pointer"
               >
                 {opts.map((o) => (
@@ -249,6 +286,19 @@ export default function AdminSettings() {
             </div>
           ))}
         </div>
+        <button
+          onClick={handleSaveRules}
+          disabled={savingRules}
+          className="btn-gold px-5 py-2.5 rounded-full font-semibold flex items-center gap-2 text-sm disabled:opacity-50"
+        >
+          {savingRules ? (
+            <><Loader2 size={15} className="animate-spin" /><span>Guardando...</span></>
+          ) : rulesSaved ? (
+            <><CheckCircle size={15} /><span>Guardado ✓</span></>
+          ) : (
+            <><Save size={15} /><span>Guardar Reglas</span></>
+          )}
+        </button>
       </div>
 
       <div className="glass rounded-2xl p-6 border border-white/8">
