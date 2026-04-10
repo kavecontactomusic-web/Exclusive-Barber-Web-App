@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Star, Check, ChevronLeft, User, Loader2 } from 'lucide-react';
+import { Star, Check, ChevronLeft, Loader2 } from 'lucide-react';
 import { getBarbers } from '../../services/barbers';
 import type { Barber } from '../../types';
 
@@ -28,25 +28,6 @@ export default function Step2Barber({ selected, onSelect, onBack }: Props) {
 
       <h3 className="font-serif text-2xl font-bold text-white mb-1">Elige tu barbero</h3>
       <p className="text-zinc-500 text-sm mb-5">Selecciona quién te atenderá</p>
-
-      <button
-        onClick={() => onSelect(null)}
-        className={`w-full flex items-center gap-4 p-4 rounded-xl border transition-all mb-3 ${
-          selected === null
-            ? 'border-gold/50 bg-gold/10'
-            : 'border-white/8 glass hover:border-white/20'
-        }`}
-      >
-        <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-          selected === null ? 'bg-gold/20' : 'bg-white/8'
-        }`}>
-          {selected === null ? <Check size={18} className="text-gold" /> : <User size={18} className="text-zinc-400" />}
-        </div>
-        <div className="text-left">
-          <p className="text-white font-medium text-sm">Sin preferencia</p>
-          <p className="text-zinc-500 text-xs">El próximo barbero disponible</p>
-        </div>
-      </button>
 
       {loading ? (
         <div className="flex items-center justify-center py-8">
