@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Star, Calendar, Zap } from 'lucide-react';
+import { Star, Calendar } from 'lucide-react';
 import { getBarbers } from '../../services/barbers';
 import type { Barber } from '../../types';
 
@@ -92,24 +92,6 @@ export default function Team({ onBooking }: TeamProps) {
               </button>
             </div>
           ))}
-        </div>
-
-        <div className="mt-10 glass-gold rounded-2xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gold/20 flex items-center justify-center">
-              <Zap size={18} className="text-gold" />
-            </div>
-            <div>
-              <p className="text-white font-semibold">¿Sin preferencia de barbero?</p>
-              <p className="text-zinc-400 text-sm">Te asignamos el próximo disponible</p>
-            </div>
-          </div>
-          <button
-            onClick={onBooking}
-            className="btn-gold px-6 py-2.5 rounded-full text-sm font-semibold whitespace-nowrap"
-          >
-            <span>Reservar Ahora</span>
-          </button>
         </div>
       </div>
     </section>
