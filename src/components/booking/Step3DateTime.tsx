@@ -46,8 +46,7 @@ function timeToMinutes(time: string): number {
 // Hora actual en Colombia (UTC-5) expresada en minutos desde medianoche
 function getCurrentMinutesColombia(): number {
   const now = new Date();
-  // Colombia es UTC-5
-  const colombiaOffset = -5 * 60; // minutos
+  const colombiaOffset = -5 * 60;
   const utcMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
   const colombiaMinutes = (utcMinutes + colombiaOffset + 24 * 60) % (24 * 60);
   return colombiaMinutes;
@@ -92,9 +91,8 @@ function generateSlots(
     const slotStart = minutes;
     const slotEnd = slotStart + serviceDuration;
 
-    // Slot pasado: solo bloquear si la hora de inicio ya pasó en Colombia
-    const isPast = isToday && slotStart <= currentMinutes;
-    // Excede cierre: el servicio terminaría después del cierre
+    // Solo bloquear si el slot ya pasó completamente (< estricto, no <=)
+    const isPast = isToday && slotStart < currentMinutes;
     const exceedsClosing = slotEnd > closeMinutes;
     const crossesLunch = lunchStart !== null && lunchEnd !== null &&
       slotStart < lunchEnd && slotEnd > lunchStart;
@@ -141,7 +139,6 @@ export default function Step3DateTime({ barberId, selectedDate, selectedTime, se
     }
   };
 
-  // Verificar si el día está cerrado
   const dateObj = new Date(tempDate + 'T12:00:00');
   const dayOfWeek = dateObj.getDay();
   const daySchedule = schedule.find((s) => s.day_of_week === dayOfWeek);
