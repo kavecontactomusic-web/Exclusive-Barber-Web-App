@@ -127,7 +127,8 @@ export default function BookingModal({ isOpen, onClose, preselectedService }: Bo
   if (groupSize === null) {
     return (
       <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center">
-        <div className="absolute inset-0 bg-dark/80 backdrop-blur-xl" onClick={onClose} />
+        {/* Sin onClick en el fondo — no cierra al tocar afuera */}
+        <div className="absolute inset-0 bg-dark/80 backdrop-blur-xl" />
         <div className="relative w-full sm:max-w-2xl glass border border-white/10 rounded-t-3xl sm:rounded-3xl overflow-hidden animate-slide-up max-h-[95vh] flex flex-col">
           <div className="flex items-center justify-between px-6 py-4 border-b border-white/8">
             <h2 className="font-serif text-xl font-bold text-white">Nueva Reserva</h2>
@@ -185,7 +186,8 @@ export default function BookingModal({ isOpen, onClose, preselectedService }: Bo
   if (success) {
     return (
       <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-        <div className="absolute inset-0 bg-dark/90 backdrop-blur-xl" onClick={onClose} />
+        {/* Sin onClick en el fondo — no cierra al tocar afuera */}
+        <div className="absolute inset-0 bg-dark/90 backdrop-blur-xl" />
         <div className="relative glass rounded-3xl p-10 max-w-md w-full text-center animate-slide-up border border-white/10">
           <div className="w-20 h-20 rounded-full bg-green-500/20 border border-green-500/40 flex items-center justify-center mx-auto mb-6">
             <CheckCircle size={36} className="text-green-400" />
@@ -223,7 +225,8 @@ export default function BookingModal({ isOpen, onClose, preselectedService }: Bo
 
   return (
     <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center">
-      <div className="absolute inset-0 bg-dark/80 backdrop-blur-xl" onClick={onClose} />
+      {/* Sin onClick en el fondo — no cierra al tocar afuera */}
+      <div className="absolute inset-0 bg-dark/80 backdrop-blur-xl" />
       <div className="relative w-full sm:max-w-2xl glass border border-white/10 rounded-t-3xl sm:rounded-3xl overflow-hidden animate-slide-up max-h-[95vh] flex flex-col">
         <div className="h-1 bg-white/5 relative">
           <div className="h-full bg-gradient-to-r from-gold-400 to-gold-300 transition-all duration-500" style={{ width: `${progressPct}%` }} />
