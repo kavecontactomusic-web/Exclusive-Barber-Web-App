@@ -6,7 +6,7 @@ import type { Booking, Barber } from '../../types';
 
 type ViewMode = 'day' | 'week';
 
-const HOURS = Array.from({ length: 9 }, (_, i) => `${(i + 9).toString().padStart(2, '0')}:00`);
+const HOURS = Array.from({ length: 13 }, (_, i) => `${(i + 8).toString().padStart(2, '0')}:00`);
 const DAYS_ES = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
 const statusColors: Record<string, string> = {
