@@ -17,22 +17,36 @@ const STATUS_LABELS: Record<string, string> = {
 
 const MONTHS_ES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 
-// Fix timezone — usa fecha local, no UTC
-function getTodayLocal(): string {
-  const d = new Date();
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
+// Fecha de hoy en hora colombiana (UTC-5)
+function getTodayColombia(): string {
+  const now = new Date();
+  const colombiaTime = new Date(now.getTime() - 5 * 60 * 60 * 1000);
+  const year = colombiaTime.getUTCFullYear();
+  const month = String(colombiaTime.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(colombiaTime.getUTCDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+// Mes actual en hora colombiana
+function getCurrentYearMonthColombia(): string {
+  return getTodayColombia().slice(0, 7);
+}
+
+// Índice del mes actual en Colombia
+function getCurrentMonthIndexColombia(): number {
+  const now = new Date();
+  const colombiaTime = new Date(now.getTime() - 5 * 60 * 60 * 1000);
+  return colombiaTime.getUTCMonth();
 }
 
 function BarberDashboard({ barber, onLogout }: { barber: Barber; onLogout: () => void }) {
   const [tab, setTab] = useState<BarberTab>('agenda');
   const [todayAppts, setTodayAppts] = useState<Booking[]>([]);
   const [allAppts, setAllAppts] = useState<Booking[]>([]);
-  const today = getTodayLocal();
-  const currentYearMonth = today.slice(0, 7);
-  const currentMonthName = MONTHS_ES[new Date().getMonth()];
+
+  const today = getTodayColombia();
+  const currentYearMonth = getCurrentYearMonthColombia();
+  const currentMonthName = MONTHS_ES[getCurrentMonthIndexColombia()];
 
   useEffect(() => {
     getBookingsByBarberAndDate(barber.id, today).then(setTodayAppts);
@@ -43,7 +57,6 @@ function BarberDashboard({ barber, onLogout }: { barber: Barber; onLogout: () =>
   const earningsToday = completedToday.reduce((s, b) => s + b.price, 0);
   const commissionToday = Math.round(earningsToday * barber.commission / 100);
 
-  // Mes actual — todas las reservas completadas del mes
   const monthAppts = allAppts.filter((b) => b.date.startsWith(currentYearMonth));
   const monthCompleted = monthAppts.filter((b) => b.status === 'completed');
   const monthEarnings = monthCompleted.reduce((s, b) => s + b.price, 0);
@@ -197,7 +210,6 @@ function BarberDashboard({ barber, onLogout }: { barber: Barber; onLogout: () =>
               </div>
             </div>
 
-            {/* Comisión del mes */}
             <div className="glass rounded-xl p-4 border border-green-500/20 text-center">
               <p className="font-mono text-xl font-bold text-green-400">{formatCOP(monthCommission)}</p>
               <p className="text-zinc-400 text-xs mt-1">Tu comisión ({barber.commission}%) — {currentMonthName}</p>
