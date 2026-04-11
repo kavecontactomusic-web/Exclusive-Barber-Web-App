@@ -43,6 +43,26 @@ function timeToMinutes(time: string): number {
   return h * 60 + m;
 }
 
+// Hora actual en Colombia (UTC-5) expresada en minutos desde medianoche
+function getCurrentMinutesColombia(): number {
+  const now = new Date();
+  // Colombia es UTC-5
+  const colombiaOffset = -5 * 60; // minutos
+  const utcMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
+  const colombiaMinutes = (utcMinutes + colombiaOffset + 24 * 60) % (24 * 60);
+  return colombiaMinutes;
+}
+
+// Fecha de hoy en Colombia
+function getTodayLocalColombia(): string {
+  const now = new Date();
+  const colombiaTime = new Date(now.getTime() - 5 * 60 * 60 * 1000);
+  const year = colombiaTime.getUTCFullYear();
+  const month = String(colombiaTime.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(colombiaTime.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function generateSlots(
   date: string,
   occupiedSlots: { time: string; duration: number }[],
@@ -56,10 +76,9 @@ function generateSlots(
   if (!daySchedule || !daySchedule.is_open) return [];
 
   const slots = [];
-  const today = getTodayLocal();
-  const isToday = date === today;
-  const now = new Date();
-  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  const todayColombia = getTodayLocalColombia();
+  const isToday = date === todayColombia;
+  const currentMinutes = getCurrentMinutesColombia();
 
   const openMinutes = timeToMinutes(daySchedule.open_time);
   const closeMinutes = timeToMinutes(daySchedule.close_time);
@@ -73,7 +92,9 @@ function generateSlots(
     const slotStart = minutes;
     const slotEnd = slotStart + serviceDuration;
 
+    // Slot pasado: solo bloquear si la hora de inicio ya pasó en Colombia
     const isPast = isToday && slotStart <= currentMinutes;
+    // Excede cierre: el servicio terminaría después del cierre
     const exceedsClosing = slotEnd > closeMinutes;
     const crossesLunch = lunchStart !== null && lunchEnd !== null &&
       slotStart < lunchEnd && slotEnd > lunchStart;
