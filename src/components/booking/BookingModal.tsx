@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, CheckCircle, Loader2, Users, User } from 'lucide-react';
+import { X, CheckCircle, Users, User } from 'lucide-react';
 import type { Service, Barber, BookingState } from '../../types';
 import { createBooking } from '../../services/bookings';
 import Step1Service from './Step1Service';
@@ -81,6 +81,19 @@ export default function BookingModal({ isOpen, onClose, preselectedService }: Bo
     clientEmail,
   };
 
+  // Slots ya seleccionados por personas anteriores — para bloquearlos en la persona actual
+  const getPendingSlots = () => {
+    const currentBarberId = persons[currentPerson]?.selectedBarber?.id;
+    return persons
+      .slice(0, currentPerson)
+      .filter((p) => p.selectedBarber?.id === currentBarberId && p.selectedDate && p.selectedTime && p.selectedService)
+      .map((p) => ({
+        time: p.selectedTime,
+        duration: p.selectedService!.duration ?? 30,
+        date: p.selectedDate,
+      }));
+  };
+
   const handleConfirm = async () => {
     setLoading(true);
     setError('');
@@ -94,7 +107,7 @@ export default function BookingModal({ isOpen, onClose, preselectedService }: Bo
           serviceId: person.selectedService.id,
           serviceName: person.selectedService.name,
           barberId: person.selectedBarber?.id ?? '',
-          barberName: person.selectedBarber?.shortName ?? 'Sin preferencia',
+          barberName: person.selectedBarber?.shortName ?? '',
           date: person.selectedDate,
           time: person.selectedTime,
           price: person.selectedService.price,
@@ -127,7 +140,6 @@ export default function BookingModal({ isOpen, onClose, preselectedService }: Bo
   if (groupSize === null) {
     return (
       <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center">
-        {/* Sin onClick en el fondo — no cierra al tocar afuera */}
         <div className="absolute inset-0 bg-dark/80 backdrop-blur-xl" />
         <div className="relative w-full sm:max-w-2xl glass border border-white/10 rounded-t-3xl sm:rounded-3xl overflow-hidden animate-slide-up max-h-[95vh] flex flex-col">
           <div className="flex items-center justify-between px-6 py-4 border-b border-white/8">
@@ -186,7 +198,6 @@ export default function BookingModal({ isOpen, onClose, preselectedService }: Bo
   if (success) {
     return (
       <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-        {/* Sin onClick en el fondo — no cierra al tocar afuera */}
         <div className="absolute inset-0 bg-dark/90 backdrop-blur-xl" />
         <div className="relative glass rounded-3xl p-10 max-w-md w-full text-center animate-slide-up border border-white/10">
           <div className="w-20 h-20 rounded-full bg-green-500/20 border border-green-500/40 flex items-center justify-center mx-auto mb-6">
@@ -208,7 +219,7 @@ export default function BookingModal({ isOpen, onClose, preselectedService }: Bo
                 </div>
                 <div className="flex justify-between">
                   <span className="text-zinc-500 text-xs">Barbero</span>
-                  <span className="text-white text-xs font-medium">{p.selectedBarber?.name || 'Sin preferencia'}</span>
+                  <span className="text-white text-xs font-medium">{p.selectedBarber?.name}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-zinc-500 text-xs">Fecha & Hora</span>
@@ -225,7 +236,6 @@ export default function BookingModal({ isOpen, onClose, preselectedService }: Bo
 
   return (
     <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center">
-      {/* Sin onClick en el fondo — no cierra al tocar afuera */}
       <div className="absolute inset-0 bg-dark/80 backdrop-blur-xl" />
       <div className="relative w-full sm:max-w-2xl glass border border-white/10 rounded-t-3xl sm:rounded-3xl overflow-hidden animate-slide-up max-h-[95vh] flex flex-col">
         <div className="h-1 bg-white/5 relative">
@@ -281,6 +291,7 @@ export default function BookingModal({ isOpen, onClose, preselectedService }: Bo
               selectedDate={persons[currentPerson].selectedDate}
               selectedTime={persons[currentPerson].selectedTime}
               serviceDuration={persons[currentPerson].selectedService?.duration ?? 30}
+              pendingSlots={getPendingSlots()}
               onSelect={(date, time) => {
                 updatePerson('selectedDate', date);
                 updatePerson('selectedTime', time);
