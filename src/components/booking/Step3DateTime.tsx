@@ -92,7 +92,7 @@ function generateSlots(
     const slotEnd = slotStart + serviceDuration;
 
     // Solo bloquear si el slot ya pasó completamente (< estricto, no <=)
-    const isPast = isToday && slotStart < currentMinutes;
+    const isPast = isToday && slotStart <= currentMinutes;
     const exceedsClosing = slotEnd > closeMinutes;
     const crossesLunch = lunchStart !== null && lunchEnd !== null &&
       slotStart < lunchEnd && slotEnd > lunchStart;
