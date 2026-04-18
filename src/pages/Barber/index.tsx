@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { CalendarDays, Scissors, Clock, User, LogOut, Star } from 'lucide-react';
+import { CalendarDays, Scissors, Clock, User, LogOut, Star, ChevronLeft, ChevronRight } from 'lucide-react';
 import BarberLogin from './BarberLogin';
 import { getBookingsByBarberAndDate, getBookings, updateBookingStatus } from '../../services/bookings';
 import { formatCOP } from '../../data';
@@ -16,8 +16,8 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const MONTHS_ES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+const MONTHS_SHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
-// Fecha de hoy en hora colombiana (UTC-5)
 function getTodayColombia(): string {
   const now = new Date();
   const colombiaTime = new Date(now.getTime() - 5 * 60 * 60 * 1000);
@@ -27,22 +27,39 @@ function getTodayColombia(): string {
   return `${year}-${month}-${day}`;
 }
 
-// Mes actual en hora colombiana
 function getCurrentYearMonthColombia(): string {
   return getTodayColombia().slice(0, 7);
 }
 
-// Índice del mes actual en Colombia
 function getCurrentMonthIndexColombia(): number {
   const now = new Date();
   const colombiaTime = new Date(now.getTime() - 5 * 60 * 60 * 1000);
   return colombiaTime.getUTCMonth();
 }
 
+function formatDateLabel(dateStr: string): string {
+  const [year, month, day] = dateStr.split('-');
+  return `${parseInt(day)} ${MONTHS_SHORT[parseInt(month) - 1]} ${year}`;
+}
+
+function addDays(dateStr: string, days: number): string {
+  const d = new Date(dateStr + 'T12:00:00');
+  d.setDate(d.getDate() + days);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function BarberDashboard({ barber, onLogout }: { barber: Barber; onLogout: () => void }) {
   const [tab, setTab] = useState<BarberTab>('agenda');
   const [todayAppts, setTodayAppts] = useState<Booking[]>([]);
   const [allAppts, setAllAppts] = useState<Booking[]>([]);
+
+  // Fecha seleccionada en historial
+  const [selectedHistorialDate, setSelectedHistorialDate] = useState(getTodayColombia());
+  const [historialDayAppts, setHistorialDayAppts] = useState<Booking[]>([]);
+  const [loadingHistorial, setLoadingHistorial] = useState(false);
 
   const today = getTodayColombia();
   const currentYearMonth = getCurrentYearMonthColombia();
@@ -53,6 +70,14 @@ function BarberDashboard({ barber, onLogout }: { barber: Barber; onLogout: () =>
     getBookings().then((all) => setAllAppts(all.filter((b) => b.barberId === barber.id)));
   }, [barber.id, today]);
 
+  // Cargar citas del día seleccionado en historial
+  useEffect(() => {
+    setLoadingHistorial(true);
+    getBookingsByBarberAndDate(barber.id, selectedHistorialDate)
+      .then(setHistorialDayAppts)
+      .finally(() => setLoadingHistorial(false));
+  }, [barber.id, selectedHistorialDate]);
+
   const completedToday = todayAppts.filter((b) => b.status === 'completed');
   const earningsToday = completedToday.reduce((s, b) => s + b.price, 0);
   const commissionToday = Math.round(earningsToday * barber.commission / 100);
@@ -61,6 +86,11 @@ function BarberDashboard({ barber, onLogout }: { barber: Barber; onLogout: () =>
   const monthCompleted = monthAppts.filter((b) => b.status === 'completed');
   const monthEarnings = monthCompleted.reduce((s, b) => s + b.price, 0);
   const monthCommission = Math.round(monthEarnings * barber.commission / 100);
+
+  // Stats del día seleccionado en historial
+  const historialDayCompleted = historialDayAppts.filter((b) => b.status === 'completed');
+  const historialDayEarnings = historialDayCompleted.reduce((s, b) => s + b.price, 0);
+  const historialDayCommission = Math.round(historialDayEarnings * barber.commission / 100);
 
   const updateStatus = async (id: string, status: Booking['status']) => {
     await updateBookingStatus(id, status);
@@ -199,32 +229,74 @@ function BarberDashboard({ barber, onLogout }: { barber: Barber; onLogout: () =>
 
         {tab === 'historial' && (
           <div className="space-y-4">
-            <div className="glass-gold rounded-xl p-4 border border-gold/20 grid grid-cols-2 gap-4">
+
+            {/* Selector de día */}
+            <div className="glass rounded-xl p-3 border border-white/8 flex items-center justify-between">
+              <button
+                onClick={() => setSelectedHistorialDate(addDays(selectedHistorialDate, -1))}
+                className="w-8 h-8 rounded-lg glass border border-white/10 flex items-center justify-center text-zinc-400 hover:text-white transition-colors"
+              >
+                <ChevronLeft size={16} />
+              </button>
               <div className="text-center">
-                <p className="font-mono text-2xl font-bold text-white">{monthCompleted.length}</p>
-                <p className="text-zinc-500 text-xs">Completados {currentMonthName}</p>
+                <p className="text-white font-semibold text-sm">{formatDateLabel(selectedHistorialDate)}</p>
+                {selectedHistorialDate === today && (
+                  <p className="text-gold text-[10px]">Hoy</p>
+                )}
               </div>
-              <div className="text-center">
-                <p className="font-mono text-sm font-bold gold-text">{formatCOP(monthEarnings)}</p>
+              <button
+                onClick={() => {
+                  if (selectedHistorialDate < today) {
+                    setSelectedHistorialDate(addDays(selectedHistorialDate, 1));
+                  }
+                }}
+                disabled={selectedHistorialDate >= today}
+                className="w-8 h-8 rounded-lg glass border border-white/10 flex items-center justify-center text-zinc-400 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+
+            {/* Stats del día seleccionado */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="glass rounded-xl p-3 text-center border border-white/8">
+                <p className="font-mono text-2xl font-bold text-white">{historialDayCompleted.length}</p>
+                <p className="text-zinc-500 text-xs">Completados</p>
+              </div>
+              <div className="glass rounded-xl p-3 text-center border border-white/8">
+                <p className="font-mono text-sm font-bold gold-text">{formatCOP(historialDayEarnings)}</p>
                 <p className="text-zinc-500 text-xs">Facturado</p>
               </div>
             </div>
-
-            <div className="glass rounded-xl p-4 border border-green-500/20 text-center">
-              <p className="font-mono text-xl font-bold text-green-400">{formatCOP(monthCommission)}</p>
-              <p className="text-zinc-400 text-xs mt-1">Tu comisión ({barber.commission}%) — {currentMonthName}</p>
+            <div className="glass rounded-xl p-3 text-center border border-green-500/20">
+              <p className="font-mono text-lg font-bold text-green-400">{formatCOP(historialDayCommission)}</p>
+              <p className="text-zinc-400 text-xs mt-0.5">Tu comisión ({barber.commission}%)</p>
             </div>
 
-            <p className="section-label text-[10px] px-1">Historial Completo</p>
-            {allAppts.length === 0 ? (
-              <div className="text-center py-8 text-zinc-600 text-sm">Sin historial</div>
+            {/* Resumen del mes */}
+            <div className="glass-gold rounded-xl p-4 border border-gold/20 grid grid-cols-2 gap-4">
+              <div className="text-center">
+                <p className="font-mono text-xl font-bold text-white">{monthCompleted.length}</p>
+                <p className="text-zinc-500 text-xs">Total {currentMonthName}</p>
+              </div>
+              <div className="text-center">
+                <p className="font-mono text-sm font-bold gold-text">{formatCOP(monthCommission)}</p>
+                <p className="text-zinc-500 text-xs">Comisión mes</p>
+              </div>
+            </div>
+
+            {/* Citas del día seleccionado */}
+            <p className="section-label text-[10px] px-1">Citas del {formatDateLabel(selectedHistorialDate)}</p>
+            {loadingHistorial ? (
+              <div className="text-center py-8 text-zinc-600 text-sm">Cargando...</div>
+            ) : historialDayAppts.length === 0 ? (
+              <div className="text-center py-8 text-zinc-600 text-sm">Sin citas este día</div>
             ) : (
-              allAppts.slice().reverse().map((b) => (
+              historialDayAppts.map((b) => (
                 <div key={b.id} className="glass rounded-xl p-4 border border-white/8 flex justify-between items-center">
                   <div>
                     <p className="text-white font-medium text-sm">{b.clientName}</p>
-                    <p className="text-zinc-500 text-xs">{b.date} · {b.time}</p>
-                    <p className="text-zinc-600 text-xs">{b.serviceName}</p>
+                    <p className="text-zinc-500 text-xs">{b.time} · {b.serviceName}</p>
                   </div>
                   <div className="text-right">
                     <p className="font-mono font-bold gold-text">{formatCOP(b.price)}</p>
