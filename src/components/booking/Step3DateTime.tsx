@@ -9,6 +9,7 @@ interface Props {
   selectedDate: string;
   selectedTime: string;
   serviceDuration: number;
+  pendingSlots?: { time: string; duration: number; date: string }[];
   onSelect: (date: string, time: string) => void;
   onBack: () => void;
 }
@@ -43,7 +44,6 @@ function timeToMinutes(time: string): number {
   return h * 60 + m;
 }
 
-// Hora actual en Colombia (UTC-5) expresada en minutos desde medianoche
 function getCurrentMinutesColombia(): number {
   const now = new Date();
   const colombiaOffset = -5 * 60;
@@ -52,7 +52,6 @@ function getCurrentMinutesColombia(): number {
   return colombiaMinutes;
 }
 
-// Fecha de hoy en Colombia
 function getTodayLocalColombia(): string {
   const now = new Date();
   const colombiaTime = new Date(now.getTime() - 5 * 60 * 60 * 1000);
@@ -65,6 +64,7 @@ function getTodayLocalColombia(): string {
 function generateSlots(
   date: string,
   occupiedSlots: { time: string; duration: number }[],
+  pendingSlots: { time: string; duration: number; date: string }[],
   serviceDuration: number,
   schedule: DaySchedule[]
 ): { time: string; available: boolean }[] {
@@ -84,6 +84,9 @@ function generateSlots(
   const lunchStart = daySchedule.lunch_start ? timeToMinutes(daySchedule.lunch_start) : null;
   const lunchEnd = daySchedule.lunch_end ? timeToMinutes(daySchedule.lunch_end) : null;
 
+  // Slots pendientes del mismo día
+  const pendingSlotsForDate = pendingSlots.filter((p) => p.date === date);
+
   for (let minutes = openMinutes; minutes < closeMinutes; minutes += 15) {
     const hour = Math.floor(minutes / 60);
     const min = minutes % 60;
@@ -91,27 +94,35 @@ function generateSlots(
     const slotStart = minutes;
     const slotEnd = slotStart + serviceDuration;
 
-    // Solo bloquear si el slot ya pasó completamente (< estricto, no <=)
     const isPast = isToday && slotStart <= currentMinutes;
     const exceedsClosing = slotEnd > closeMinutes;
     const crossesLunch = lunchStart !== null && lunchEnd !== null &&
       slotStart < lunchEnd && slotEnd > lunchStart;
+
+    // Bloqueado por reservas ya guardadas en Supabase
     const isOccupied = occupiedSlots.some(({ time, duration }) => {
       const bookedStart = timeToMinutes(time);
       const bookedEnd = bookedStart + duration;
       return slotStart < bookedEnd && slotEnd > bookedStart;
     });
 
+    // Bloqueado por selecciones pendientes de personas anteriores en el mismo grupo
+    const isPending = pendingSlotsForDate.some(({ time, duration }) => {
+      const pendingStart = timeToMinutes(time);
+      const pendingEnd = pendingStart + duration;
+      return slotStart < pendingEnd && slotEnd > pendingStart;
+    });
+
     slots.push({
       time: timeStr,
-      available: !isPast && !exceedsClosing && !crossesLunch && !isOccupied,
+      available: !isPast && !exceedsClosing && !crossesLunch && !isOccupied && !isPending,
     });
   }
 
   return slots;
 }
 
-export default function Step3DateTime({ barberId, selectedDate, selectedTime, serviceDuration, onSelect, onBack }: Props) {
+export default function Step3DateTime({ barberId, selectedDate, selectedTime, serviceDuration, pendingSlots = [], onSelect, onBack }: Props) {
   const dates = getDates(14);
   const [tempDate, setTempDate] = useState(selectedDate || toLocalISO(dates[0]));
   const [tempTime, setTempTime] = useState(selectedTime);
@@ -131,7 +142,7 @@ export default function Step3DateTime({ barberId, selectedDate, selectedTime, se
       .finally(() => setLoadingSlots(false));
   }, [tempDate, barberId]);
 
-  const slots = generateSlots(tempDate, occupiedSlots, serviceDuration, schedule);
+  const slots = generateSlots(tempDate, occupiedSlots, pendingSlots, serviceDuration, schedule);
 
   const handleContinue = () => {
     if (tempDate && tempTime) {
