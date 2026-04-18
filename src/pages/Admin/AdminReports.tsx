@@ -1,11 +1,20 @@
 import { useState, useEffect } from 'react';
 import { Download, ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Minus, DollarSign, CheckCircle, XCircle, Users } from 'lucide-react';
-import { getBookingsByMonth, getBookingsByYear } from '../../services/bookings';
+import { getBookingsByMonth, getBookingsByYear, getBookingsByDate } from '../../services/bookings';
 import { getBarbers } from '../../services/barbers';
 import { formatCOP } from '../../data';
 import type { Booking, Barber } from '../../types';
 
 const MONTHS_ES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+const MONTHS_SHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+
+const STATUS_LABELS: Record<string, string> = {
+  pending: 'Pendiente',
+  confirmed: 'Confirmada',
+  completed: 'Completado',
+  cancelled: 'Cancelada',
+  'no-show': 'No asistió',
+};
 
 const heatmapData = [
   [20, 40, 60, 80, 70, 50, 30],
@@ -22,6 +31,29 @@ const heatmapData = [
 const daysLabels = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 const hourLabels = ['9am', '10am', '11am', '12pm', '1pm', '2pm', '3pm', '4pm', '5pm'];
 
+function getTodayColombia(): string {
+  const now = new Date();
+  const colombiaTime = new Date(now.getTime() - 5 * 60 * 60 * 1000);
+  const year = colombiaTime.getUTCFullYear();
+  const month = String(colombiaTime.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(colombiaTime.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function addDays(dateStr: string, days: number): string {
+  const d = new Date(dateStr + 'T12:00:00');
+  d.setDate(d.getDate() + days);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function formatDateLabel(dateStr: string): string {
+  const [year, month, day] = dateStr.split('-');
+  return `${parseInt(day)} ${MONTHS_SHORT[parseInt(month) - 1]} ${year}`;
+}
+
 function TrendBadge({ current, prev }: { current: number; prev: number }) {
   if (prev === 0 && current === 0) return null;
   if (prev === 0) return (
@@ -35,18 +67,28 @@ function TrendBadge({ current, prev }: { current: number; prev: number }) {
 
 export default function AdminReports() {
   const now = new Date();
-  const [viewMode, setViewMode] = useState<'month' | 'year'>('month');
+  const [viewMode, setViewMode] = useState<'day' | 'month' | 'year'>('month');
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
+  const [selectedDay, setSelectedDay] = useState(getTodayColombia());
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [prevBookings, setPrevBookings] = useState<Booking[]>([]);
   const [yearBookings, setYearBookings] = useState<Booking[]>([]);
+  const [dayBookings, setDayBookings] = useState<Booking[]>([]);
   const [barbers, setBarbers] = useState<Barber[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
-    if (viewMode === 'month') {
+    if (viewMode === 'day') {
+      Promise.all([
+        getBookingsByDate(selectedDay),
+        getBarbers(),
+      ]).then(([day, b]) => {
+        setDayBookings(day);
+        setBarbers(b);
+      }).finally(() => setLoading(false));
+    } else if (viewMode === 'month') {
       const prevMonth = selectedMonth === 1 ? 12 : selectedMonth - 1;
       const prevYear = selectedMonth === 1 ? selectedYear - 1 : selectedYear;
       Promise.all([
@@ -67,7 +109,7 @@ export default function AdminReports() {
         setBarbers(b);
       }).finally(() => setLoading(false));
     }
-  }, [viewMode, selectedYear, selectedMonth]);
+  }, [viewMode, selectedYear, selectedMonth, selectedDay]);
 
   const navMonth = (dir: number) => {
     let m = selectedMonth + dir;
@@ -88,6 +130,12 @@ export default function AdminReports() {
   const prevRevenue = prevCompleted.reduce((s, b) => s + b.price, 0);
   const prevCancelled = prevBookings.filter((b) => b.status === 'cancelled').length;
   const prevAvgTicket = prevCompleted.length > 0 ? Math.round(prevRevenue / prevCompleted.length) : 0;
+
+  // Stats del día
+  const dayCompleted = dayBookings.filter((b) => b.status === 'completed');
+  const dayRevenue = dayCompleted.reduce((s, b) => s + b.price, 0);
+  const dayCancelled = dayBookings.filter((b) => b.status === 'cancelled').length;
+  const dayAvgTicket = dayCompleted.length > 0 ? Math.round(dayRevenue / dayCompleted.length) : 0;
 
   const barberRevenue = barbers.map((b) => ({
     name: b.shortName,
@@ -132,11 +180,19 @@ export default function AdminReports() {
     { label: 'Cancelaciones', value: String(cancelled), sub: 'en el año', icon: XCircle, color: 'text-red-400', bg: 'bg-red-500/10 border-red-500/20', trend: null },
   ];
 
+  const today = getTodayColombia();
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <div className="flex gap-1 glass rounded-xl p-1 border border-white/8">
+            <button
+              onClick={() => setViewMode('day')}
+              className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${viewMode === 'day' ? 'bg-gold/20 text-gold' : 'text-zinc-500 hover:text-white'}`}
+            >
+              Día
+            </button>
             <button
               onClick={() => setViewMode('month')}
               className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${viewMode === 'month' ? 'bg-gold/20 text-gold' : 'text-zinc-500 hover:text-white'}`}
@@ -151,7 +207,26 @@ export default function AdminReports() {
             </button>
           </div>
 
-          {viewMode === 'month' ? (
+          {viewMode === 'day' && (
+            <div className="flex items-center gap-2 glass rounded-xl px-3 py-1.5 border border-white/8">
+              <button onClick={() => setSelectedDay(addDays(selectedDay, -1))} className="text-zinc-400 hover:text-white transition-colors">
+                <ChevronLeft size={16} />
+              </button>
+              <span className="text-white text-sm font-medium min-w-[130px] text-center">
+                {formatDateLabel(selectedDay)}
+                {selectedDay === today && <span className="text-gold text-xs ml-1">(Hoy)</span>}
+              </span>
+              <button
+                onClick={() => { if (selectedDay < today) setSelectedDay(addDays(selectedDay, 1)); }}
+                disabled={selectedDay >= today}
+                className="text-zinc-400 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          )}
+
+          {viewMode === 'month' && (
             <div className="flex items-center gap-2 glass rounded-xl px-3 py-1.5 border border-white/8">
               <button onClick={() => navMonth(-1)} className="text-zinc-400 hover:text-white transition-colors">
                 <ChevronLeft size={16} />
@@ -167,7 +242,9 @@ export default function AdminReports() {
                 <ChevronRight size={16} />
               </button>
             </div>
-          ) : (
+          )}
+
+          {viewMode === 'year' && (
             <div className="flex items-center gap-2 glass rounded-xl px-3 py-1.5 border border-white/8">
               <button onClick={() => setSelectedYear((y) => y - 1)} className="text-zinc-400 hover:text-white transition-colors">
                 <ChevronLeft size={16} />
@@ -192,6 +269,96 @@ export default function AdminReports() {
 
       {loading ? (
         <div className="flex items-center justify-center py-20 text-zinc-600 text-sm">Cargando datos...</div>
+      ) : viewMode === 'day' ? (
+        <div className="space-y-6">
+          {/* KPIs del día */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="glass rounded-2xl p-5 border bg-gold/10 border-gold/20">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-gold/10 mb-3">
+                <DollarSign size={18} className="text-gold" />
+              </div>
+              <p className="font-mono text-xl font-bold mb-0.5 text-gold">{formatCOP(dayRevenue)}</p>
+              <p className="text-white text-xs font-medium">Ingresos</p>
+              <p className="text-zinc-600 text-xs mt-0.5">{dayCompleted.length} servicios</p>
+            </div>
+            <div className="glass rounded-2xl p-5 border bg-green-500/10 border-green-500/20">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-green-500/10 mb-3">
+                <CheckCircle size={18} className="text-green-400" />
+              </div>
+              <p className="font-mono text-xl font-bold mb-0.5 text-green-400">{dayCompleted.length}</p>
+              <p className="text-white text-xs font-medium">Completadas</p>
+              <p className="text-zinc-600 text-xs mt-0.5">reservas completadas</p>
+            </div>
+            <div className="glass rounded-2xl p-5 border bg-blue-500/10 border-blue-500/20">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-blue-500/10 mb-3">
+                <TrendingUp size={18} className="text-blue-400" />
+              </div>
+              <p className="font-mono text-xl font-bold mb-0.5 text-blue-400">{formatCOP(dayAvgTicket)}</p>
+              <p className="text-white text-xs font-medium">Ticket Promedio</p>
+              <p className="text-zinc-600 text-xs mt-0.5">por servicio</p>
+            </div>
+            <div className="glass rounded-2xl p-5 border bg-red-500/10 border-red-500/20">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-red-500/10 mb-3">
+                <XCircle size={18} className="text-red-400" />
+              </div>
+              <p className="font-mono text-xl font-bold mb-0.5 text-red-400">{dayCancelled}</p>
+              <p className="text-white text-xs font-medium">Cancelaciones</p>
+              <p className="text-zinc-600 text-xs mt-0.5">en este día</p>
+            </div>
+          </div>
+
+          {/* Lista de citas del día */}
+          <div className="glass rounded-2xl border border-white/8 overflow-hidden">
+            <div className="px-6 py-4 border-b border-white/8">
+              <h3 className="font-semibold text-white">Citas del {formatDateLabel(selectedDay)}</h3>
+            </div>
+            {dayBookings.length === 0 ? (
+              <p className="text-zinc-600 text-sm text-center py-10">Sin citas este día</p>
+            ) : (
+              <div className="divide-y divide-white/5">
+                {dayBookings.map((b) => (
+                  <div key={b.id} className="px-6 py-4 flex items-center justify-between">
+                    <div>
+                      <p className="text-white font-medium text-sm">{b.clientName}</p>
+                      <p className="text-zinc-500 text-xs">{b.time} · {b.serviceName} · {b.barberName}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-mono font-bold text-gold text-sm">{formatCOP(b.price)}</p>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full status-${b.status}`}>
+                        {STATUS_LABELS[b.status]}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Ingresos por barbero ese día */}
+          {dayCompleted.length > 0 && (
+            <div className="glass rounded-2xl p-6 border border-white/8">
+              <h3 className="font-semibold text-white mb-5">Ingresos por Barbero — {formatDateLabel(selectedDay)}</h3>
+              <div className="space-y-4">
+                {barbers.map((barber) => {
+                  const barberDayRevenue = dayCompleted
+                    .filter((bk) => bk.barberId === barber.id)
+                    .reduce((s, bk) => s + bk.price, 0);
+                  if (barberDayRevenue === 0) return null;
+                  const commission = Math.round(barberDayRevenue * barber.commission / 100);
+                  return (
+                    <div key={barber.id} className="flex items-center justify-between glass rounded-xl p-3 border border-white/8">
+                      <span className="text-zinc-300 text-sm">{barber.shortName}</span>
+                      <div className="text-right">
+                        <p className="font-mono text-gold text-sm font-semibold">{formatCOP(barberDayRevenue)}</p>
+                        <p className="text-green-400 text-xs">Comisión: {formatCOP(commission)}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
       ) : (
         <>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
