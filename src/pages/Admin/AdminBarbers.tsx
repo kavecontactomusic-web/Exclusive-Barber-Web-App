@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Star, Phone, Edit2, ToggleLeft, ToggleRight, X, Plus, User, Loader2, Trash2 } from 'lucide-react';
 import { getBarbers, updateBarberAvailability, createBarber, updateBarber, deleteBarber } from '../../services/barbers';
+import { getBookings } from '../../services/bookings';
 import { formatCOP } from '../../data';
-import type { Barber } from '../../types';
+import type { Barber, Booking } from '../../types';
 
 interface BarberForm {
   name: string;
@@ -24,6 +25,7 @@ const emptyForm: BarberForm = {
 
 export default function AdminBarbers() {
   const [list, setList] = useState<Barber[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editTarget, setEditTarget] = useState<Barber | null>(null);
@@ -31,11 +33,28 @@ export default function AdminBarbers() {
   const [errors, setErrors] = useState<Partial<BarberForm>>({});
   const [saving, setSaving] = useState(false);
 
+  const currentYearMonth = new Date().toISOString().slice(0, 7);
+
   useEffect(() => {
-    getBarbers()
-      .then(setList)
+    Promise.all([getBarbers(), getBookings()])
+      .then(([barberList, bookingList]) => {
+        setList(barberList);
+        setBookings(bookingList);
+      })
       .finally(() => setLoading(false));
   }, []);
+
+  // Calcular stats dinámicos por barbero
+  const getBarberStats = (barberId: string) => {
+    const barberBookings = bookings.filter(
+      (b) => b.barberId === barberId &&
+             b.date.startsWith(currentYearMonth) &&
+             b.status === 'completed'
+    );
+    const services = barberBookings.length;
+    const earnings = barberBookings.reduce((s, b) => s + b.price, 0);
+    return { services, earnings };
+  };
 
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`¿Eliminar a ${name}? Esta acción no se puede deshacer.`)) return;
@@ -158,87 +177,92 @@ export default function AdminBarbers() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          {list.map((barber) => (
-            <div key={barber.id} className="glass rounded-2xl p-6 border border-white/8">
-              <div className="flex items-start justify-between mb-5">
-                <div className="flex items-center gap-3">
-                  <div
-                    className="w-12 h-12 rounded-full flex items-center justify-center text-base font-bold text-dark"
-                    style={{ background: 'linear-gradient(135deg, #D4AF37, #9C7B22)' }}
-                  >
-                    {barber.avatar}
-                  </div>
-                  <div>
-                    <p className="text-white font-semibold">{barber.name}</p>
-                    <div className="flex items-center gap-1">
-                      <Star size={11} className="text-gold fill-gold" />
-                      <span className="text-xs text-zinc-400">{barber.rating} ({barber.reviewCount})</span>
+          {list.map((barber) => {
+            const { services, earnings } = getBarberStats(barber.id);
+            const commission = Math.round(earnings * barber.commission / 100);
+
+            return (
+              <div key={barber.id} className="glass rounded-2xl p-6 border border-white/8">
+                <div className="flex items-start justify-between mb-5">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="w-12 h-12 rounded-full flex items-center justify-center text-base font-bold text-dark"
+                      style={{ background: 'linear-gradient(135deg, #D4AF37, #9C7B22)' }}
+                    >
+                      {barber.avatar}
+                    </div>
+                    <div>
+                      <p className="text-white font-semibold">{barber.name}</p>
+                      <div className="flex items-center gap-1">
+                        <Star size={11} className="text-gold fill-gold" />
+                        <span className="text-xs text-zinc-400">{barber.rating} ({barber.reviewCount})</span>
+                      </div>
                     </div>
                   </div>
+                  <button
+                    onClick={() => toggleAvailable(barber.id)}
+                    className="text-zinc-400 hover:text-gold transition-colors"
+                  >
+                    {barber.available
+                      ? <ToggleRight size={28} className="text-green-400" />
+                      : <ToggleLeft size={28} className="text-zinc-600" />
+                    }
+                  </button>
                 </div>
-                <button
-                  onClick={() => toggleAvailable(barber.id)}
-                  className="text-zinc-400 hover:text-gold transition-colors"
-                >
-                  {barber.available
-                    ? <ToggleRight size={28} className="text-green-400" />
-                    : <ToggleLeft size={28} className="text-zinc-600" />
-                  }
-                </button>
-              </div>
 
-              <div className="space-y-3 mb-5">
-                <div className="flex items-center gap-2 text-sm">
-                  <Phone size={13} className="text-zinc-600" />
-                  <span className="text-zinc-400">{barber.phone}</span>
+                <div className="space-y-3 mb-5">
+                  <div className="flex items-center gap-2 text-sm">
+                    <Phone size={13} className="text-zinc-600" />
+                    <span className="text-zinc-400">{barber.phone}</span>
+                  </div>
+                  <p className="text-zinc-500 text-xs leading-relaxed">{barber.bio}</p>
                 </div>
-                <p className="text-zinc-500 text-xs leading-relaxed">{barber.bio}</p>
-              </div>
 
-              <div className="flex flex-wrap gap-1.5 mb-5">
-                {barber.specialties.map((s) => (
-                  <span key={s} className="text-xs px-2 py-0.5 glass border border-white/10 rounded-full text-zinc-400">
-                    {s}
-                  </span>
-                ))}
-              </div>
+                <div className="flex flex-wrap gap-1.5 mb-5">
+                  {barber.specialties.map((s) => (
+                    <span key={s} className="text-xs px-2 py-0.5 glass border border-white/10 rounded-full text-zinc-400">
+                      {s}
+                    </span>
+                  ))}
+                </div>
 
-              <div className="grid grid-cols-3 gap-2 mb-5">
-                <div className="glass rounded-xl p-2.5 text-center">
-                  <p className="font-mono text-sm font-bold text-white">{barber.totalServicesMonth}</p>
-                  <p className="text-zinc-600 text-[10px]">Servicios</p>
+                <div className="grid grid-cols-3 gap-2 mb-5">
+                  <div className="glass rounded-xl p-2.5 text-center">
+                    <p className="font-mono text-sm font-bold text-white">{services}</p>
+                    <p className="text-zinc-600 text-[10px]">Servicios</p>
+                  </div>
+                  <div className="glass rounded-xl p-2.5 text-center">
+                    <p className="font-mono text-xs font-bold gold-text">{formatCOP(earnings)}</p>
+                    <p className="text-zinc-600 text-[10px]">Ingresos</p>
+                  </div>
+                  <div className="glass rounded-xl p-2.5 text-center">
+                    <p className="font-mono text-sm font-bold text-green-400">{barber.commission}%</p>
+                    <p className="text-zinc-600 text-[10px]">Comisión</p>
+                  </div>
                 </div>
-                <div className="glass rounded-xl p-2.5 text-center">
-                  <p className="font-mono text-xs font-bold gold-text">{formatCOP(barber.earningsMonth)}</p>
-                  <p className="text-zinc-600 text-[10px]">Ingresos</p>
-                </div>
-                <div className="glass rounded-xl p-2.5 text-center">
-                  <p className="font-mono text-sm font-bold text-green-400">{barber.commission}%</p>
-                  <p className="text-zinc-600 text-[10px]">Comisión</p>
-                </div>
-              </div>
 
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => openEdit(barber)}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2 glass border border-white/10 rounded-xl text-zinc-400 hover:text-white text-xs transition-all hover:border-gold/30"
-                >
-                  <Edit2 size={13} />
-                  Editar
-                </button>
-                <button
-                  onClick={() => handleDelete(barber.id, barber.name)}
-                  className="flex items-center justify-center gap-1.5 py-2 px-3 glass border border-red-500/20 rounded-xl text-red-400 hover:text-red-300 text-xs transition-all hover:border-red-400/40"
-                >
-                  <Trash2 size={13} />
-                </button>
-                <div className="flex items-center gap-2 px-3 py-2 glass rounded-xl">
-                  <span className="text-zinc-600 text-xs">PIN:</span>
-                  <span className="font-mono text-xs text-zinc-300">••••</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => openEdit(barber)}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 glass border border-white/10 rounded-xl text-zinc-400 hover:text-white text-xs transition-all hover:border-gold/30"
+                  >
+                    <Edit2 size={13} />
+                    Editar
+                  </button>
+                  <button
+                    onClick={() => handleDelete(barber.id, barber.name)}
+                    className="flex items-center justify-center gap-1.5 py-2 px-3 glass border border-red-500/20 rounded-xl text-red-400 hover:text-red-300 text-xs transition-all hover:border-red-400/40"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                  <div className="flex items-center gap-2 px-3 py-2 glass rounded-xl">
+                    <span className="text-zinc-600 text-xs">PIN:</span>
+                    <span className="font-mono text-xs text-zinc-300">••••</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
