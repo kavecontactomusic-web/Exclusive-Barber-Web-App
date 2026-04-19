@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Search, Star, Loader2, Pencil, Trash2, X, Check } from 'lucide-react';
+import { Search, Star, Loader2, Pencil, Trash2, X, Check, ChevronLeft, ChevronRight } from 'lucide-react';
 import { getBookings, deleteBooking } from '../../services/bookings';
 import { supabase } from '../../lib/supabase';
 import { formatCOP } from '../../data';
 import type { Booking } from '../../types';
+
+const PAGE_SIZE = 20;
 
 interface Client {
   name: string;
@@ -50,6 +52,7 @@ export default function AdminClients() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
   const [editClient, setEditClient] = useState<Client | null>(null);
   const [form, setForm] = useState<EditForm>({ name: '', phone: '', email: '' });
   const [saving, setSaving] = useState(false);
@@ -61,11 +64,19 @@ export default function AdminClients() {
       .finally(() => setLoading(false));
   }, []);
 
+  // Resetear página al buscar
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
+
   const clients = buildClients(bookings);
   const filtered = clients.filter((c) =>
     c.name.toLowerCase().includes(search.toLowerCase()) ||
     c.phone.includes(search)
   );
+
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const openEdit = (c: Client) => {
     setEditClient(c);
@@ -139,65 +150,107 @@ export default function AdminClients() {
             <Loader2 size={24} className="animate-spin text-gold" />
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-white/8">
-                  {['Cliente', 'Teléfono', 'Visitas', 'Última Visita', 'Total Gastado', 'Servicio Favorito', ''].map((h) => (
-                    <th key={h} className="px-5 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider whitespace-nowrap">
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {filtered.map((c) => (
-                  <tr key={c.phone} className="hover:bg-white/2 transition-colors group">
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gold/30 to-gold/10 border border-gold/20 flex items-center justify-center text-xs font-bold text-gold">
-                          {c.name.slice(0, 2).toUpperCase()}
-                        </div>
-                        <span className="text-white font-medium">{c.name}</span>
-                      </div>
-                    </td>
-                    <td className="px-5 py-4 text-zinc-400">{c.phone}</td>
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-1">
-                        <span className="font-mono text-white font-semibold">{c.visits}</span>
-                        {c.visits >= 3 && <Star size={12} className="text-gold fill-gold" />}
-                      </div>
-                    </td>
-                    <td className="px-5 py-4 text-zinc-400">{c.lastVisit}</td>
-                    <td className="px-5 py-4 font-mono font-semibold gold-text">{formatCOP(c.totalSpent)}</td>
-                    <td className="px-5 py-4 text-zinc-400 text-xs">{c.favoriteService}</td>
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => openEdit(c)}
-                          className="p-1.5 rounded-lg text-zinc-500 hover:text-gold hover:bg-gold/10 transition-colors"
-                          title="Editar cliente"
-                        >
-                          <Pencil size={14} />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteClient(c)}
-                          disabled={deletingPhone === c.phone}
-                          className="p-1.5 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-red-400/10 transition-colors disabled:opacity-40"
-                          title="Eliminar cliente"
-                        >
-                          {deletingPhone === c.phone
-                            ? <Loader2 size={14} className="animate-spin" />
-                            : <Trash2 size={14} />
-                          }
-                        </button>
-                      </div>
-                    </td>
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-white/8">
+                    {['Cliente', 'Teléfono', 'Visitas', 'Última Visita', 'Total Gastado', 'Servicio Favorito', ''].map((h) => (
+                      <th key={h} className="px-5 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider whitespace-nowrap">
+                        {h}
+                      </th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {paginated.map((c) => (
+                    <tr key={c.phone} className="hover:bg-white/2 transition-colors group">
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gold/30 to-gold/10 border border-gold/20 flex items-center justify-center text-xs font-bold text-gold">
+                            {c.name.slice(0, 2).toUpperCase()}
+                          </div>
+                          <span className="text-white font-medium">{c.name}</span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 text-zinc-400">{c.phone}</td>
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-1">
+                          <span className="font-mono text-white font-semibold">{c.visits}</span>
+                          {c.visits >= 3 && <Star size={12} className="text-gold fill-gold" />}
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 text-zinc-400">{c.lastVisit}</td>
+                      <td className="px-5 py-4 font-mono font-semibold gold-text">{formatCOP(c.totalSpent)}</td>
+                      <td className="px-5 py-4 text-zinc-400 text-xs">{c.favoriteService}</td>
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => openEdit(c)}
+                            className="p-1.5 rounded-lg text-zinc-500 hover:text-gold hover:bg-gold/10 transition-colors"
+                            title="Editar cliente"
+                          >
+                            <Pencil size={14} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteClient(c)}
+                            disabled={deletingPhone === c.phone}
+                            className="p-1.5 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-red-400/10 transition-colors disabled:opacity-40"
+                            title="Eliminar cliente"
+                          >
+                            {deletingPhone === c.phone
+                              ? <Loader2 size={14} className="animate-spin" />
+                              : <Trash2 size={14} />
+                            }
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Paginación */}
+            {totalPages > 1 && (
+              <div className="px-5 py-4 border-t border-white/8 flex items-center justify-between">
+                <span className="text-zinc-500 text-xs">
+                  Mostrando {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} de {filtered.length}
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                    className="w-8 h-8 rounded-lg glass border border-white/10 flex items-center justify-center text-zinc-400 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    <ChevronLeft size={15} />
+                  </button>
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                      <button
+                        key={p}
+                        onClick={() => setPage(p)}
+                        className={`w-8 h-8 rounded-lg text-xs font-medium transition-all ${
+                          p === page
+                            ? 'bg-gold/20 text-gold border border-gold/30'
+                            : 'glass border border-white/10 text-zinc-500 hover:text-white'
+                        }`}
+                      >
+                        {p}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={page === totalPages}
+                    className="w-8 h-8 rounded-lg glass border border-white/10 flex items-center justify-center text-zinc-400 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    <ChevronRight size={15} />
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 
