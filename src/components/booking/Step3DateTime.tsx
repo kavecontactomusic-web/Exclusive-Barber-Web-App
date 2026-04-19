@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
-import { ChevronLeft, Loader2 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { ChevronLeft, Loader2, Lock } from 'lucide-react';
 import { getOccupiedSlotsForBarberAndDate } from '../../services/bookings';
+import { getActiveHoldsForBarberAndDate, createSlotHold, releaseSlotHold } from '../../services/slotHolds';
 import { getSchedule } from '../../services/schedule';
 import type { DaySchedule } from '../../services/schedule';
 
@@ -64,10 +65,11 @@ function getTodayLocalColombia(): string {
 function generateSlots(
   date: string,
   occupiedSlots: { time: string; duration: number }[],
+  holdSlots: { time: string; duration: number }[],
   pendingSlots: { time: string; duration: number; date: string }[],
   serviceDuration: number,
   schedule: DaySchedule[]
-): { time: string; available: boolean }[] {
+): { time: string; available: boolean; onHold: boolean }[] {
   const dateObj = new Date(date + 'T12:00:00');
   const dayOfWeek = dateObj.getDay();
   const daySchedule = schedule.find((s) => s.day_of_week === dayOfWeek);
@@ -83,8 +85,6 @@ function generateSlots(
   const closeMinutes = timeToMinutes(daySchedule.close_time);
   const lunchStart = daySchedule.lunch_start ? timeToMinutes(daySchedule.lunch_start) : null;
   const lunchEnd = daySchedule.lunch_end ? timeToMinutes(daySchedule.lunch_end) : null;
-
-  // Slots pendientes del mismo día
   const pendingSlotsForDate = pendingSlots.filter((p) => p.date === date);
 
   for (let minutes = openMinutes; minutes < closeMinutes; minutes += 15) {
@@ -99,23 +99,29 @@ function generateSlots(
     const crossesLunch = lunchStart !== null && lunchEnd !== null &&
       slotStart < lunchEnd && slotEnd > lunchStart;
 
-    // Bloqueado por reservas ya guardadas en Supabase
     const isOccupied = occupiedSlots.some(({ time, duration }) => {
       const bookedStart = timeToMinutes(time);
       const bookedEnd = bookedStart + duration;
       return slotStart < bookedEnd && slotEnd > bookedStart;
     });
 
-    // Bloqueado por selecciones pendientes de personas anteriores en el mismo grupo
     const isPending = pendingSlotsForDate.some(({ time, duration }) => {
       const pendingStart = timeToMinutes(time);
       const pendingEnd = pendingStart + duration;
       return slotStart < pendingEnd && slotEnd > pendingStart;
     });
 
+    // Slot en hold por otro usuario
+    const isOnHold = holdSlots.some(({ time, duration }) => {
+      const holdStart = timeToMinutes(time);
+      const holdEnd = holdStart + duration;
+      return slotStart < holdEnd && slotEnd > holdStart;
+    });
+
     slots.push({
       time: timeStr,
-      available: !isPast && !exceedsClosing && !crossesLunch && !isOccupied && !isPending,
+      available: !isPast && !exceedsClosing && !crossesLunch && !isOccupied && !isPending && !isOnHold,
+      onHold: isOnHold && !isOccupied,
     });
   }
 
@@ -127,8 +133,10 @@ export default function Step3DateTime({ barberId, selectedDate, selectedTime, se
   const [tempDate, setTempDate] = useState(selectedDate || toLocalISO(dates[0]));
   const [tempTime, setTempTime] = useState(selectedTime);
   const [occupiedSlots, setOccupiedSlots] = useState<{ time: string; duration: number }[]>([]);
+  const [holdSlots, setHoldSlots] = useState<{ time: string; duration: number }[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [schedule, setSchedule] = useState<DaySchedule[]>([]);
+  const currentHoldId = useRef<string | null>(null);
 
   useEffect(() => {
     getSchedule().then(setSchedule);
@@ -137,18 +145,51 @@ export default function Step3DateTime({ barberId, selectedDate, selectedTime, se
   useEffect(() => {
     if (!tempDate || !barberId) return;
     setLoadingSlots(true);
-    getOccupiedSlotsForBarberAndDate(barberId, tempDate)
-      .then(setOccupiedSlots)
-      .finally(() => setLoadingSlots(false));
+    Promise.all([
+      getOccupiedSlotsForBarberAndDate(barberId, tempDate),
+      getActiveHoldsForBarberAndDate(barberId, tempDate),
+    ]).then(([occupied, holds]) => {
+      setOccupiedSlots(occupied);
+      setHoldSlots(holds);
+    }).finally(() => setLoadingSlots(false));
   }, [tempDate, barberId]);
 
-  const slots = generateSlots(tempDate, occupiedSlots, pendingSlots, serviceDuration, schedule);
+  // Limpiar hold al desmontar o cambiar de fecha
+  useEffect(() => {
+    return () => {
+      if (currentHoldId.current) {
+        releaseSlotHold(currentHoldId.current);
+        currentHoldId.current = null;
+      }
+    };
+  }, [tempDate]);
+
+  const handleSelectTime = async (time: string) => {
+    // Liberar hold anterior si existe
+    if (currentHoldId.current) {
+      await releaseSlotHold(currentHoldId.current);
+      currentHoldId.current = null;
+    }
+
+    // Crear nuevo hold
+    const holdId = await createSlotHold(barberId, tempDate, time, serviceDuration);
+    currentHoldId.current = holdId;
+    setTempTime(time);
+
+    // Refrescar holds para que otros vean el bloqueo
+    const holds = await getActiveHoldsForBarberAndDate(barberId, tempDate);
+    setHoldSlots(holds);
+  };
 
   const handleContinue = () => {
     if (tempDate && tempTime) {
+      // No liberar el hold aquí — se libera cuando se confirma la reserva
+      currentHoldId.current = null;
       onSelect(tempDate, tempTime);
     }
   };
+
+  const slots = generateSlots(tempDate, occupiedSlots, holdSlots, pendingSlots, serviceDuration, schedule);
 
   const dateObj = new Date(tempDate + 'T12:00:00');
   const dayOfWeek = dateObj.getDay();
@@ -217,24 +258,33 @@ export default function Step3DateTime({ barberId, selectedDate, selectedTime, se
         <p className="text-zinc-500 text-sm text-center py-8">No hay horarios disponibles para este día</p>
       ) : (
         <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 mb-6">
-          {slots.map(({ time, available }) => (
+          {slots.map(({ time, available, onHold }) => (
             <button
               key={time}
               disabled={!available}
-              onClick={() => available && setTempTime(time)}
-              className={`py-2 rounded-xl text-xs font-mono font-medium border transition-all ${
-                !available
+              onClick={() => available && handleSelectTime(time)}
+              className={`py-2 rounded-xl text-xs font-mono font-medium border transition-all relative ${
+                onHold
+                  ? 'border-amber-500/30 bg-amber-500/10 text-amber-600 cursor-not-allowed'
+                  : !available
                   ? 'border-white/5 text-zinc-700 line-through cursor-not-allowed'
                   : tempTime === time
                   ? 'border-gold bg-gold/15 text-gold shadow-gold'
                   : 'border-white/10 text-zinc-300 hover:border-gold/40 hover:text-gold glass'
               }`}
             >
-              {time}
+              {onHold ? <Lock size={10} className="mx-auto" /> : time}
             </button>
           ))}
         </div>
       )}
+
+      <div className="flex items-center gap-4 mb-4 text-xs text-zinc-600">
+        <span className="flex items-center gap-1">
+          <span className="w-3 h-3 rounded-sm border border-amber-500/30 bg-amber-500/10 inline-block" />
+          Reservando ahora
+        </span>
+      </div>
 
       <button
         disabled={!tempDate || !tempTime}
